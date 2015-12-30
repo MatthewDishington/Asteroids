@@ -16,7 +16,6 @@ def get_tick_count():
 class GameWorldObject:
     def __init__(self):
         self.colour="White"
-        print "Im in GameWorldObject"
 
     def draw(self, canvas):
         self._update_position()
@@ -36,9 +35,7 @@ class GameWorldObject:
             self.points.append((self.x + new_x , self.y + new_y))
 
     def _update_position(self):
-
         # update position based on movement speed (velocity speed)
-
         self.x += self.velocity_x
         self.y += self.velocity_y
 
@@ -66,6 +63,22 @@ class GameWorldObject:
     def get_y(self):
         return self.y
 
+    def get_velocity_x(self):
+        return self.velocity_x
+
+    def get_velocity_y(self):
+        return self.velocity_y
+
+    def is_collision(self, gameObject):
+        collision = False
+
+        x = gameObject.get_x() - self.get_x()
+        y = gameObject.get_y() - self.get_y()
+        distance = math.sqrt(x**2 + y**2)
+        if gameObject.get_radius() + self.get_radius() >= distance:
+            collision = True
+
+        return collision
 
 class Ship(GameWorldObject):
     def __init__(self):
@@ -91,7 +104,6 @@ class Ship(GameWorldObject):
         self.max_bullets = 8 # Number of bullets allowed on screen
 
         self.reset()
-
 
     def reset(self):
 
@@ -159,14 +171,26 @@ class Ship(GameWorldObject):
     def reset_bullet_cooldown(self,event):
         self.last_bullet_time = 0
 
+    def get_bullets(self):
+        return list(self.bullets)
+
+    def remove_bullet(self, bullet):
+        self.bullets.remove(bullet)
+        self.bullets_used -= 1
 
 
 class Asteroid(GameWorldObject):
-    def __init__(self):
+    def __init__(self, size, x = None, y = None, velocity_x = None, velocity_y = None):
+        if size < 1:
+            self.size = 1
+        else:
+            self.size = size
+
         self.colour="Yellow"
         self.drag_factor=0
-        minRadius=30
-        maxRadius=50
+        self.radius= 40 / size
+        minRadius = self.radius - (10 / size)
+        maxRadius = self.radius + (10/ size)
         granularity=20
         minVary=25
         maxVary=75
@@ -184,30 +208,47 @@ class Asteroid(GameWorldObject):
             self.shape.append(point)
             angle += 2 * math.pi / granularity
 
-        self.x = random.randint(0,CANVAS_WIDTH)
-        self.y = random.randint(0,CANVAS_HEIGHT)
+        if x is None:
+            self.x = random.randint(0,CANVAS_WIDTH)
+        else:
+            self.x = x
+        if y is None:
+            self.y = random.randint(0,CANVAS_HEIGHT)
+        else:
+            self.y = y
         self.angle= random.randint(0,360)
         self.rotation_factor= random.randint(0,100) / 100.0 - 0.5
-        self.velocity_x = random.randint(0,100) / 100.0 - 0.5
-        self.velocity_y = random.randint(0,100) / 100.0 - 0.5
+        if velocity_x is None:
+            self.velocity_x = random.randint(0,100) / 100.0 - 0.5
+        else:
+            self.velocity_x = velocity_x
+
+        if velocity_y is None:
+            self.velocity_y = random.randint(0,100) / 100.0 - 0.5
+        else:
+            self.velocity_y = velocity_y
 
     def remove(self):
         pass
+
+    def get_radius(self):
+        return self.radius
+
+    def get_size(self):
+        return self.size
+
 
 class Bullet(GameWorldObject):
     def __init__(self,ship):
 
         self.shape = ((0,0),(0,5))
         self.colour = "White"
-
+        self.radius = 2.5
 
         # Direction of Bullet should be the direction in which the ship is facing
         self.angle = ship.get_angle()
         self.velocity_x = math.sin(2 * math.pi * (ship.get_angle()/360.0))
         self.velocity_y = -math.cos(2 * math.pi * (ship.get_angle()/360.0))
-
-        print "Bullet velocity x = ", self.velocity_x
-        print "Bullet velocity y = ", self.velocity_y
 
         #Initial position of the bullet should be the ships center point
         self.x=ship.get_x()
@@ -222,7 +263,6 @@ class Bullet(GameWorldObject):
         self.velocity_y *= 5
 
         # No rotation or rotational speed
-
         self.rotation_factor = 0
         self.drag_factor = 0
 
@@ -232,6 +272,9 @@ class Bullet(GameWorldObject):
     def remove(self):
     # Remove a bullet if its Time To Live has expired
         return get_tick_count() - self.created_time > self.time_to_live
+
+    def get_radius(self):
+        return self.radius
 
 class Application(Frame):
     draw_interval = int((1/60.0) * 1000) # refresh 60 times a second
@@ -246,7 +289,7 @@ class Application(Frame):
         self.addShip(ship)
         self.asteroids = list()
         for i in range(0,3):
-            self.asteroids.append(Asteroid())
+            self.asteroids.append(Asteroid(1))
 
         parent.bind('<Left>',ship.rotate_left)
         parent.bind('<Right>',ship.rotate_right)
@@ -258,7 +301,28 @@ class Application(Frame):
     def addShip(self, ship):
         self.ship = ship
 
+    def update_objects(self):
+        #Check for collisions
+
+        for asteroid in list(self.asteroids):
+            bullets = self.ship.get_bullets()
+            for bullet in bullets:
+                if bullet.is_collision(asteroid):
+                    size = asteroid.get_size()
+                    if size < 3:
+                        a1 = Asteroid(size + 1, asteroid.get_x(), asteroid.get_y(),
+                                      asteroid.get_velocity_y() * -2, asteroid.get_velocity_x() * 2)
+                        self.asteroids.append(a1)
+
+                        a2 = Asteroid(size + 1, asteroid.get_x(), asteroid.get_y(),
+                                      asteroid.get_velocity_y() * 2, asteroid.get_velocity_x() * -2)
+                        self.asteroids.append(a2)
+
+                    self.asteroids.remove(asteroid)
+                    self.ship.remove_bullet(bullet)
+
     def draw(self):
+        self.update_objects()
         self.canvas.delete('all')
         self.ship.draw(self.canvas)
         for asteroid in self.asteroids:
