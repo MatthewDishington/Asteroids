@@ -7,20 +7,27 @@ import math
 import time
 
 
-CANVAS_WIDTH = 800
-CANVAS_HEIGHT = 800
+CANVAS_WIDTH = 500
+CANVAS_HEIGHT = 500
+SCORE = {1:10, 2:50, 3:100}
 
 def get_tick_count():
     return int(round(time.time() * 1000))
+
+def _create_circle(self, x, y, r, **kwargs):
+    return self.create_oval(x-r, y-r, x+r, y+r, **kwargs)
 
 class GameWorldObject:
     def __init__(self):
         self.colour="White"
 
     def draw(self, canvas):
+
+        canvas.create_polygon(self.points, fill='', outline=self.colour)
+
+    def update(self):
         self._update_position()
         self._set_points()
-        canvas.create_polygon(self.points, fill='', outline=self.colour)
 
     def _set_points(self):
         radians = self.angle * math.pi /180.0
@@ -80,12 +87,20 @@ class GameWorldObject:
 
         return collision
 
+    def get_radius(self):
+        return self.radius
+
 class Ship(GameWorldObject):
     def __init__(self):
         self.colour="White"
-        self.acceleration_factor = 0.35
+        self.acceleration_factor = 0.5
         self.drag_factor = 0.02
         self.rotation_factor = 10
+        self.score = 0
+        self.active = True
+        self.reactivate_time = 0
+        self.lives = 3
+        self.radius= 15
 
         # calculate the co-ordinates of the ship
         xTop = 0
@@ -121,6 +136,8 @@ class Ship(GameWorldObject):
         self.last_bullet_time = 0
         self.bullets_used = 0
 
+    def set_active(self,active):
+        self.active = active
 
     def rotate_left(self, event):
         self.angle -= self.rotation_factor
@@ -140,19 +157,45 @@ class Ship(GameWorldObject):
         self.velocity_x += x * self.acceleration_factor
         self.velocity_y -= y * self.acceleration_factor
 
-    def draw(self,canvas):
+    def update(self):
+
+        # check if ship is action
+        if self.active == False:
+            if get_tick_count() < self.reactivate_time:
+                return
+            self.active = True
+            self.reset()
+
         for bullet in set(self.bullets):
             if bullet.remove():
                 self.bullets_used = max(self.bullets_used - 1, 0)
                 self.bullets.remove(bullet)
+            else:
+                bullet.update()
 
-        GameWorldObject.draw(self,canvas)
+        GameWorldObject.update(self)
 
-        for bullet in self.bullets:
-            bullet.draw(canvas)
+    def draw(self,canvas):
+        #Draw lives
+        canvas.create_text(50,20, text='Lives:', fill='White' )
+
+        for i in range(self.lives):
+            canvas.create_circle((i * 15) + 35, 40, 5, fill="Green")
+
+        canvas.create_text(CANVAS_WIDTH - 50,20, text='Score:', fill='White' )
+        canvas.create_text(CANVAS_WIDTH - 50,40, text=str(self.score), fill='Blue' )
+
+        if self.active:
+            GameWorldObject.draw(self,canvas)
+
+            for bullet in self.bullets:
+                bullet.draw(canvas)
 
 
     def fire(self,event):
+        if not self.active:
+            return
+
         # Dont fire unless the cooldown period has expired
         if (get_tick_count() - self.last_bullet_time >= self.bullet_cool_down):
 
@@ -167,6 +210,10 @@ class Ship(GameWorldObject):
                 self.last_bullet_time = get_tick_count()
                 self.bullets_used += 1
 
+
+    def add_points(self,points):
+        self.score+=points
+
     #Reset cooldown (used when fire key is released)
     def reset_bullet_cooldown(self,event):
         self.last_bullet_time = 0
@@ -178,6 +225,21 @@ class Ship(GameWorldObject):
         self.bullets.remove(bullet)
         self.bullets_used -= 1
 
+    def make_inactive_for(self, milliseconds):
+        self.active = False
+        self.reactivate_time = get_tick_count() + milliseconds
+
+    def get_lives(self):
+        return self.lives
+
+    def remove_live(self):
+        self.lives -= 1
+
+    def is_collision(self, gameObject):
+        if not self.active:
+            return False
+
+        return GameWorldObject.is_collision(self, gameObject)
 
 class Asteroid(GameWorldObject):
     def __init__(self, size, x = None, y = None, velocity_x = None, velocity_y = None):
@@ -212,10 +274,12 @@ class Asteroid(GameWorldObject):
             self.x = random.randint(0,CANVAS_WIDTH)
         else:
             self.x = x
+
         if y is None:
             self.y = random.randint(0,CANVAS_HEIGHT)
         else:
             self.y = y
+
         self.angle= random.randint(0,360)
         self.rotation_factor= random.randint(0,100) / 100.0 - 0.5
         if velocity_x is None:
@@ -285,6 +349,9 @@ class Application(Frame):
         self.pack(fill=BOTH, expand=True)
         self.canvas = Canvas(parent, width=CANVAS_WIDTH, height=CANVAS_HEIGHT, background='Black')
         self.canvas.pack()
+
+        self.game_over = False
+
         ship = Ship()
         self.addShip(ship)
         self.asteroids = list()
@@ -302,9 +369,21 @@ class Application(Frame):
         self.ship = ship
 
     def update_objects(self):
+
+        if self.game_over == True:
+            return
+
+        # Update game objects
+
+        self.ship.update()
+
+        for asteroid in list(self.asteroids):
+            asteroid.update()
+
         #Check for collisions
 
         for asteroid in list(self.asteroids):
+            #Compare each bullet against Asteroid
             bullets = self.ship.get_bullets()
             for bullet in bullets:
                 if bullet.is_collision(asteroid):
@@ -312,14 +391,31 @@ class Application(Frame):
                     if size < 3:
                         a1 = Asteroid(size + 1, asteroid.get_x(), asteroid.get_y(),
                                       asteroid.get_velocity_y() * -2, asteroid.get_velocity_x() * 2)
+                        a1.update()
                         self.asteroids.append(a1)
 
                         a2 = Asteroid(size + 1, asteroid.get_x(), asteroid.get_y(),
                                       asteroid.get_velocity_y() * 2, asteroid.get_velocity_x() * -2)
+                        a2.update()
                         self.asteroids.append(a2)
 
+                    #Update Score
+                    points=SCORE[asteroid.get_size()]
+                    self.ship.add_points(points)
                     self.asteroids.remove(asteroid)
                     self.ship.remove_bullet(bullet)
+
+
+            #Compare ship against Asteroid
+            if self.ship.is_collision(asteroid):
+                self.ship.remove_live()
+                if self.ship.get_lives() <= 0:
+                    self.ship.set_active(False)
+                    self.game_over=True
+                else:
+                     self.ship.make_inactive_for(350)
+
+
 
     def draw(self):
         self.update_objects()
@@ -328,9 +424,15 @@ class Application(Frame):
         for asteroid in self.asteroids:
             asteroid.draw(self.canvas)
 
+        # Print game over message if needed
+        if self.game_over == True:
+            self.canvas.create_text(CANVAS_WIDTH/2, CANVAS_HEIGHT/2, text="GAME OVER", fill="White", font=("Purisa", 20) )
+
         self.parent.after(self.draw_interval, self.draw) # set timer to refresh screen
 
 root = Tk()
+Canvas.create_circle = _create_circle
+
 root.title( "Asteroids")
 
 app = Application(root)
