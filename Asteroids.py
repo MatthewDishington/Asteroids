@@ -90,6 +90,7 @@ class GameWorldObject:
     def get_radius(self):
         return self.radius
 
+
 class Ship(GameWorldObject):
     def __init__(self):
         self.colour="White"
@@ -101,6 +102,8 @@ class Ship(GameWorldObject):
         self.reactivate_time = 0
         self.lives = 3
         self.radius= 15
+        self.shield_duration = 4000
+        self.shield_cool_down = 15000
 
         # calculate the co-ordinates of the ship
         xTop = 0
@@ -136,6 +139,10 @@ class Ship(GameWorldObject):
         self.last_bullet_time = 0
         self.bullets_used = 0
 
+        #Make invincible
+        self.invincibility = True
+        self.last_shield_time = get_tick_count()
+
     def set_active(self,active):
         self.active = active
 
@@ -158,13 +165,15 @@ class Ship(GameWorldObject):
         self.velocity_y -= y * self.acceleration_factor
 
     def update(self):
-
         # check if ship is action
         if self.active == False:
             if get_tick_count() < self.reactivate_time:
                 return
             self.active = True
             self.reset()
+
+        #Update shield flag
+        self.invincibility = (get_tick_count() - self.last_shield_time) < self.shield_duration
 
         for bullet in set(self.bullets):
             if bullet.remove():
@@ -187,9 +196,19 @@ class Ship(GameWorldObject):
 
         if self.active:
             GameWorldObject.draw(self,canvas)
+            if self.invincibility:
+                canvas.create_circle(self.x, self.y,self.radius + 7, outline="White")
 
             for bullet in self.bullets:
                 bullet.draw(canvas)
+
+        #Indicate if shield available
+        canvas.create_text(50, CANVAS_HEIGHT - 20, text='Shield', fill="White")
+        colour = 'Red'
+        if (get_tick_count() - self.last_shield_time) > self.shield_cool_down:
+            if not self.invincibility:
+                colour='Green'
+        canvas.create_rectangle(80, CANVAS_HEIGHT - 15, 90, CANVAS_HEIGHT - 25, fill=colour)
 
 
     def fire(self,event):
@@ -241,6 +260,15 @@ class Ship(GameWorldObject):
 
         return GameWorldObject.is_collision(self, gameObject)
 
+    def activate_shield(self, event):
+        if not self.invincibility:
+            if get_tick_count() - self.last_shield_time > self.shield_cool_down:
+                self.invincibility = True
+                self.last_shield_time = get_tick_count()
+
+    def is_invincible(self):
+        return self.invincibility
+
 class Asteroid(GameWorldObject):
     def __init__(self, size, x = None, y = None, velocity_x = None, velocity_y = None):
         if size < 1:
@@ -291,6 +319,8 @@ class Asteroid(GameWorldObject):
             self.velocity_y = random.randint(0,100) / 100.0 - 0.5
         else:
             self.velocity_y = velocity_y
+
+        self.update() # create the points
 
     def remove(self):
         pass
@@ -355,14 +385,16 @@ class Application(Frame):
         ship = Ship()
         self.addShip(ship)
         self.asteroids = list()
-        for i in range(0,3):
-            self.asteroids.append(Asteroid(1))
+        self.level = 1
+        self.create_new_wave()
 
         parent.bind('<Left>',ship.rotate_left)
         parent.bind('<Right>',ship.rotate_right)
         parent.bind('<Up>', ship.accelerate)
         parent.bind('<space>', ship.fire)
         parent.bind('<KeyRelease-space>', ship.reset_bullet_cooldown)
+        parent.bind('<Escape>', ship.activate_shield)
+
         self.draw()
 
     def addShip(self, ship):
@@ -391,12 +423,10 @@ class Application(Frame):
                     if size < 3:
                         a1 = Asteroid(size + 1, asteroid.get_x(), asteroid.get_y(),
                                       asteroid.get_velocity_y() * -2, asteroid.get_velocity_x() * 2)
-                        a1.update()
                         self.asteroids.append(a1)
 
                         a2 = Asteroid(size + 1, asteroid.get_x(), asteroid.get_y(),
                                       asteroid.get_velocity_y() * 2, asteroid.get_velocity_x() * -2)
-                        a2.update()
                         self.asteroids.append(a2)
 
                     #Update Score
@@ -407,14 +437,18 @@ class Application(Frame):
 
 
             #Compare ship against Asteroid
-            if self.ship.is_collision(asteroid):
-                self.ship.remove_live()
-                if self.ship.get_lives() <= 0:
-                    self.ship.set_active(False)
-                    self.game_over=True
-                else:
-                     self.ship.make_inactive_for(350)
+            if not self.ship.is_invincible():
+                if self.ship.is_collision(asteroid):
+                    self.ship.remove_live()
+                    if self.ship.get_lives() <= 0:
+                        self.ship.set_active(False)
+                        self.game_over=True
+                    else:
+                         self.ship.make_inactive_for(350)
 
+        if len(self.asteroids) == 0:
+            self.level += 1
+            self.create_new_wave()
 
 
     def draw(self):
@@ -424,11 +458,18 @@ class Application(Frame):
         for asteroid in self.asteroids:
             asteroid.draw(self.canvas)
 
+        # Show current wave number
+        self.canvas.create_text(CANVAS_WIDTH - 40, CANVAS_HEIGHT - 20, text='Wave  ' + str(self.level) , fill="White")
+
         # Print game over message if needed
         if self.game_over == True:
             self.canvas.create_text(CANVAS_WIDTH/2, CANVAS_HEIGHT/2, text="GAME OVER", fill="White", font=("Purisa", 20) )
 
         self.parent.after(self.draw_interval, self.draw) # set timer to refresh screen
+
+    def create_new_wave(self):
+        for i in range(0,self.level + 2):
+            self.asteroids.append(Asteroid(1))
 
 root = Tk()
 Canvas.create_circle = _create_circle
