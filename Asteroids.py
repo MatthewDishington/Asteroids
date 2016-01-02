@@ -19,10 +19,17 @@ def _create_circle(self, x, y, r, **kwargs):
 
 class GameWorldObject:
     def __init__(self):
-        self.colour="White"
+        self.colour = "White"
+        self.points = list()
+        self.angle = 0
+        self.shape = list()
+        self.x = 0
+        self.velocity_x = 0
+        self.y = 0
+        self.velocity_y = 0
+        self.radius = 0
 
     def draw(self, canvas):
-
         canvas.create_polygon(self.points, fill='', outline=self.colour)
 
     def update(self):
@@ -93,7 +100,7 @@ class GameWorldObject:
 
 class Ship(GameWorldObject):
     def __init__(self):
-        self.colour="White"
+        GameWorldObject.__init__(self)
         self.acceleration_factor = 0.5
         self.drag_factor = 0.02
         self.rotation_factor = 10
@@ -260,17 +267,22 @@ class Ship(GameWorldObject):
 
         return GameWorldObject.is_collision(self, gameObject)
 
-    def activate_shield(self, event):
+    def handle_activate_shield_event(self, event):
         if not self.invincibility:
             if get_tick_count() - self.last_shield_time > self.shield_cool_down:
-                self.invincibility = True
-                self.last_shield_time = get_tick_count()
+                self.activate_shield()
 
     def is_invincible(self):
         return self.invincibility
 
+    def activate_shield(self):
+        self.invincibility = True
+        self.last_shield_time = get_tick_count()
+
 class Asteroid(GameWorldObject):
     def __init__(self, size, x = None, y = None, velocity_x = None, velocity_y = None):
+        GameWorldObject.__init__(self)
+
         if size < 1:
             self.size = 1
         else:
@@ -334,9 +346,8 @@ class Asteroid(GameWorldObject):
 
 class Bullet(GameWorldObject):
     def __init__(self,ship):
-
+        GameWorldObject.__init__(self)
         self.shape = ((0,0),(0,5))
-        self.colour = "White"
         self.radius = 2.5
 
         # Direction of Bullet should be the direction in which the ship is facing
@@ -379,7 +390,7 @@ class Application(Frame):
         self.pack(fill=BOTH, expand=True)
         self.canvas = Canvas(parent, width=CANVAS_WIDTH, height=CANVAS_HEIGHT, background='Black')
         self.canvas.pack()
-
+        self.backgroundImage = PhotoImage(file="nebula.gif")
         self.game_over = False
 
         ship = Ship()
@@ -393,8 +404,7 @@ class Application(Frame):
         parent.bind('<Up>', ship.accelerate)
         parent.bind('<space>', ship.fire)
         parent.bind('<KeyRelease-space>', ship.reset_bullet_cooldown)
-        parent.bind('<Escape>', ship.activate_shield)
-
+        parent.bind('<s>', ship.handle_activate_shield_event)
         self.draw()
 
     def addShip(self, ship):
@@ -451,9 +461,11 @@ class Application(Frame):
             self.create_new_wave()
 
 
+
     def draw(self):
         self.update_objects()
         self.canvas.delete('all')
+        self.canvas.create_image(10, 10, image = self.backgroundImage, anchor = NW)
         self.ship.draw(self.canvas)
         for asteroid in self.asteroids:
             asteroid.draw(self.canvas)
@@ -467,9 +479,12 @@ class Application(Frame):
 
         self.parent.after(self.draw_interval, self.draw) # set timer to refresh screen
 
+    #New Wave
     def create_new_wave(self):
+        self.ship.activate_shield()
         for i in range(0,self.level + 2):
             self.asteroids.append(Asteroid(1))
+
 
 root = Tk()
 Canvas.create_circle = _create_circle
