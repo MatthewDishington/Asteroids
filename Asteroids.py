@@ -12,7 +12,7 @@ import time
 pygame.mixer.init()
 fire_sound = pygame.mixer.Sound('fire.wav')
 thrust_sound = pygame.mixer.Sound('thrust.wav')
-explosion_sound = pygame.mixer.Sound('bangLarge.wav')
+explosion_sound = pygame.mixer.Sound('explosion.wav')
 
 CANVAS_WIDTH = 500
 CANVAS_HEIGHT = 500
