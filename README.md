@@ -4,7 +4,7 @@ Initial development based on:
 https://katyscode.wordpress.com/2012/06/13/coding-challenge-write-asteroids-in-10-hours-or-less/
 
 To do:
-Sound
+Sound (Done 4/1/16)
 Background (Done 2/1/16)
 Teleportation?
 Save high scores
@@ -14,6 +14,8 @@ Explosions
 Flying saucer
 Make Ship easier to use
 Thruster
+Make the little Asteroids go faster
+
 
 
 

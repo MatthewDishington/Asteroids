@@ -1,11 +1,18 @@
 __author__ = 'Matthew'
 
 
+import pygame
 from Tkinter import *
 import random
 import math
 import time
 
+
+# pygame.init()
+pygame.mixer.init()
+fire_sound = pygame.mixer.Sound('fire.wav')
+thrust_sound = pygame.mixer.Sound('thrust.wav')
+explosion_sound = pygame.mixer.Sound('bangLarge.wav')
 
 CANVAS_WIDTH = 500
 CANVAS_HEIGHT = 500
@@ -103,7 +110,7 @@ class Ship(GameWorldObject):
         GameWorldObject.__init__(self)
         self.acceleration_factor = 0.5
         self.drag_factor = 0.02
-        self.rotation_factor = 10
+        self.rotation_factor = 15
         self.score = 0
         self.active = True
         self.reactivate_time = 0
@@ -111,6 +118,9 @@ class Ship(GameWorldObject):
         self.radius= 15
         self.shield_duration = 4000
         self.shield_cool_down = 15000
+        self.thrust_sound_playing = False
+        self.thrust_sound_duration = 500
+        self.thrust_sound_last_played = 0
 
         # calculate the co-ordinates of the ship
         xTop = 0
@@ -126,7 +136,7 @@ class Ship(GameWorldObject):
                         (xTop - xSize/2.0, yTop + ySize) )
 
         self.bullet_cool_down= 200 # Fire Cool Down (ms)
-        self.max_bullets = 8 # Number of bullets allowed on screen
+        self.max_bullets = 4 # Number of bullets allowed on screen
 
         self.reset()
 
@@ -171,6 +181,15 @@ class Ship(GameWorldObject):
         self.velocity_x += x * self.acceleration_factor
         self.velocity_y -= y * self.acceleration_factor
 
+        # if not self.thrust_sound_playing:
+
+        self.thrust_sound_last_played = get_tick_count()
+        if not self.thrust_sound_playing:
+            self.thrust_sound_playing = True
+            thrust_sound.play(loops=-1)
+
+
+
     def update(self):
         # check if ship is action
         if self.active == False:
@@ -192,6 +211,12 @@ class Ship(GameWorldObject):
         GameWorldObject.update(self)
 
     def draw(self,canvas):
+
+        if self.thrust_sound_playing:
+            if get_tick_count() - self.thrust_sound_last_played > self.thrust_sound_duration:
+                self.thrust_sound_playing = False
+                thrust_sound.stop()
+
         #Draw lives
         canvas.create_text(50,20, text='Lives:', fill='White' )
 
@@ -236,6 +261,8 @@ class Ship(GameWorldObject):
                 self.last_bullet_time = get_tick_count()
                 self.bullets_used += 1
 
+                #Play fire sound
+                fire_sound.play()
 
     def add_points(self,points):
         self.score+=points
@@ -395,7 +422,7 @@ class Application(Frame):
 
         ship = Ship()
         self.addShip(ship)
-        self.asteroids = list()
+        self.asteroids = set([])
         self.level = 1
         self.create_new_wave()
 
@@ -419,36 +446,39 @@ class Application(Frame):
 
         self.ship.update()
 
-        for asteroid in list(self.asteroids):
+        for asteroid in set(self.asteroids):
             asteroid.update()
 
         #Check for collisions
 
-        for asteroid in list(self.asteroids):
+        for asteroid in set(self.asteroids):
             #Compare each bullet against Asteroid
             bullets = self.ship.get_bullets()
             for bullet in bullets:
                 if bullet.is_collision(asteroid):
+                    explosion_sound.play()
                     size = asteroid.get_size()
                     if size < 3:
                         a1 = Asteroid(size + 1, asteroid.get_x(), asteroid.get_y(),
                                       asteroid.get_velocity_y() * -2, asteroid.get_velocity_x() * 2)
-                        self.asteroids.append(a1)
+                        self.asteroids.add(a1)
 
                         a2 = Asteroid(size + 1, asteroid.get_x(), asteroid.get_y(),
                                       asteroid.get_velocity_y() * 2, asteroid.get_velocity_x() * -2)
-                        self.asteroids.append(a2)
+                        self.asteroids.add(a2)
 
                     #Update Score
                     points=SCORE[asteroid.get_size()]
                     self.ship.add_points(points)
-                    self.asteroids.remove(asteroid)
+                    if asteroid in self.asteroids:
+                        self.asteroids.remove(asteroid)
                     self.ship.remove_bullet(bullet)
 
 
             #Compare ship against Asteroid
             if not self.ship.is_invincible():
                 if self.ship.is_collision(asteroid):
+                    explosion_sound.play()
                     self.ship.remove_live()
                     if self.ship.get_lives() <= 0:
                         self.ship.set_active(False)
@@ -483,7 +513,7 @@ class Application(Frame):
     def create_new_wave(self):
         self.ship.activate_shield()
         for i in range(0,self.level + 2):
-            self.asteroids.append(Asteroid(1))
+            self.asteroids.add(Asteroid(1))
 
 
 root = Tk()
