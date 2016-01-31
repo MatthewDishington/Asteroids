@@ -3,10 +3,12 @@ __author__ = 'Matthew'
 
 import pygame
 from Tkinter import *
+import tkMessageBox
 import random
 import math
 import time
-
+import sqlite3
+import re
 
 # pygame.init()
 pygame.mixer.init()
@@ -14,15 +16,52 @@ fire_sound = pygame.mixer.Sound('fire.wav')
 thrust_sound = pygame.mixer.Sound('thrust.wav')
 explosion_sound = pygame.mixer.Sound('explosion.wav')
 
-CANVAS_WIDTH = 500
-CANVAS_HEIGHT = 500
+CANVAS_WIDTH = 700
+CANVAS_HEIGHT = 700
 SCORE = {1:10, 2:50, 3:100}
+
 
 def get_tick_count():
     return int(round(time.time() * 1000))
 
+
 def _create_circle(self, x, y, r, **kwargs):
     return self.create_oval(x-r, y-r, x+r, y+r, **kwargs)
+
+
+class ScoreDatabase:
+    def __init__(self):
+        self.connection = sqlite3.connect('Asteroid.sqlite')
+        self.cursor = self.connection.cursor()
+
+    def create_database(self):
+        self.cursor.executescript('''
+
+        CREATE TABLE IF NOT EXISTS User (
+            id     INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT UNIQUE,
+            name   TEXT UNIQUE
+        );
+
+        CREATE TABLE IF NOT EXISTS Score (
+            id     INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT UNIQUE,
+            user_id INTEGER,
+            score INTEGER,
+            score_datetime TEXT
+        );
+
+        ''')
+
+    def save_score(self, name, score):
+        self.cursor.execute('''INSERT OR IGNORE INTO User (name)
+        VALUES ( ? )''', ( name, ) )
+        self.cursor.execute('SELECT id FROM User WHERE name = ? ', (name, ))
+        user_id = self.cursor.fetchone()[0]
+
+        self.cursor.execute('''INSERT OR IGNORE INTO Score (user_id, score, score_datetime)
+        VALUES ( ?, ?, datetime("now"))''', (user_id,score ) )
+
+        self.connection.commit()
+
 
 class GameWorldObject:
     def __init__(self):
@@ -267,6 +306,9 @@ class Ship(GameWorldObject):
     def add_points(self,points):
         self.score+=points
 
+    def get_score(self):
+        return self.score
+
     #Reset cooldown (used when fire key is released)
     def reset_bullet_cooldown(self,event):
         self.last_bullet_time = 0
@@ -452,6 +494,7 @@ class Application(Frame):
         #Check for collisions
 
         for asteroid in set(self.asteroids):
+
             #Compare each bullet against Asteroid
             bullets = self.ship.get_bullets()
             for bullet in bullets:
@@ -465,6 +508,7 @@ class Application(Frame):
 
                         a2 = Asteroid(size + 1, asteroid.get_x(), asteroid.get_y(),
                                       asteroid.get_velocity_y() * 2, asteroid.get_velocity_x() * -2)
+
                         self.asteroids.add(a2)
 
                     #Update Score
@@ -483,14 +527,13 @@ class Application(Frame):
                     if self.ship.get_lives() <= 0:
                         self.ship.set_active(False)
                         self.game_over=True
+
                     else:
                          self.ship.make_inactive_for(350)
 
         if len(self.asteroids) == 0:
             self.level += 1
             self.create_new_wave()
-
-
 
     def draw(self):
         self.update_objects()
@@ -506,8 +549,11 @@ class Application(Frame):
         # Print game over message if needed
         if self.game_over == True:
             self.canvas.create_text(CANVAS_WIDTH/2, CANVAS_HEIGHT/2, text="GAME OVER", fill="White", font=("Purisa", 20) )
+            self.capture_name()
 
-        self.parent.after(self.draw_interval, self.draw) # set timer to refresh screen
+        if self.game_over == False:
+            self.parent.after(self.draw_interval, self.draw) # set timer to refresh screen
+
 
     #New Wave
     def create_new_wave(self):
@@ -516,12 +562,38 @@ class Application(Frame):
             self.asteroids.add(Asteroid(1))
 
 
+    def capture_name(self):
+
+        self.name_frame = Frame(self.canvas, bd=0, bg="Black")
+        self.name_frame.pack()
+        l = Label(self.name_frame,  bg="Black", fg="White", text="ENTER YOUR NAME", bd=0)
+        l.pack(side=LEFT)
+
+        self.name_entry = Entry(self.name_frame, width=20, bg="Black", fg="White", bd=0)
+        self.name_entry.focus()
+        self.name_entry.pack()
+        self.name_entry.bind("<Return>",self.save_score)
+        self.canvas.create_window(CANVAS_WIDTH/2, CANVAS_HEIGHT/2 + 50, window=self.name_frame)
+
+
+    def save_score (self, event):
+        name = self.name_entry.get()
+        valid = re.match('^\w+$',name) is not None
+        if not valid:
+            tkMessageBox.showinfo("Invalid", "Invalid user name")
+            self.name_entry.delete(0,END)
+            self.name_entry.focus()
+        else:
+            score = self.ship.get_score()
+            scores.save_score(name,score)
+
 root = Tk()
 Canvas.create_circle = _create_circle
 
 root.title( "Asteroids")
 
 app = Application(root)
-
+scores=ScoreDatabase()
+scores.create_database()
 
 root.mainloop()
