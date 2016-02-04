@@ -101,16 +101,21 @@ class GameWorldObject:
         self._set_points()
 
     def _set_points(self):
-        radians = self.angle * math.pi /180.0
+        self.points = self._calc_points(self.shape, self.angle)
+
+    def _calc_points(self, shape, angle):
+        radians = angle * math.pi /180.0
         sine = math.sin(radians)
         cosine = math.cos(radians)
 
         # calculate point position
-        self.points = list()
-        for p in self.shape:
+        points = list()
+        for p in shape:
             new_x =  p[0] * cosine - p[1] * sine
             new_y = p[0] * sine + p[1] * cosine
-            self.points.append((self.x + new_x , self.y + new_y))
+            points.append((self.x + new_x , self.y + new_y))
+
+        return points
 
     def _update_position(self):
         # update position based on movement speed (velocity speed)
@@ -178,6 +183,7 @@ class Ship(GameWorldObject):
         self.thrust_sound_playing = False
         self.thrust_sound_duration = 500
         self.thrust_sound_last_played = 0
+        self.count = 0
 
         # calculate the co-ordinates of the ship
         xTop = 0
@@ -191,6 +197,10 @@ class Ship(GameWorldObject):
                         (xTop + xSize/2.0, yTop + ySize),
                         (xTop, yTop + ySize - yIndent),
                         (xTop - xSize/2.0, yTop + ySize) )
+
+        self.thruster_shape = ( (xTop - xSize/8.0, yTop + ySize - 5),
+                            (xTop, yTop +ySize + yIndent - 5),
+                            (xTop + xSize/8.0 , yTop + ySize - 5))
 
         self.bullet_cool_down= 200 # Fire Cool Down (ms)
         self.max_bullets = 4 # Number of bullets allowed on screen
@@ -239,13 +249,10 @@ class Ship(GameWorldObject):
         self.velocity_y -= y * self.acceleration_factor
 
         # if not self.thrust_sound_playing:
-
         self.thrust_sound_last_played = get_tick_count()
         if not self.thrust_sound_playing:
             self.thrust_sound_playing = True
             thrust_sound.play(loops=-1)
-
-
 
     def update(self):
         # check if ship is action
@@ -287,6 +294,7 @@ class Ship(GameWorldObject):
             GameWorldObject.draw(self,canvas)
             if self.invincibility:
                 canvas.create_circle(self.x, self.y,self.radius + 7, outline="White")
+            self.draw_thruster(canvas)
 
             for bullet in self.bullets:
                 bullet.draw(canvas)
@@ -299,6 +307,15 @@ class Ship(GameWorldObject):
                 colour='Green'
         canvas.create_rectangle(80, CANVAS_HEIGHT - 15, 90, CANVAS_HEIGHT - 25, fill=colour)
 
+
+    def draw_thruster(self, canvas):
+        self.count += 1
+        self.count = self.count % 10
+        if self.thrust_sound_playing:
+            if self.count < 5:
+                thruster_points = GameWorldObject._calc_points(self, self.thruster_shape, self.angle)
+                canvas.create_line((thruster_points[0], thruster_points[1]), fill="White")
+                canvas.create_line((thruster_points[1], thruster_points[2]), fill="White")
 
     def fire(self,event):
         if not self.active:

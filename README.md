@@ -6,12 +6,9 @@ http://www.classicgaming.cc/classics/asteroids/game_flash.php
 http://www.codeskulptor.org/#user40_AZtREUXqtU_7.py
 
 To do:
-
-
-1. Thruster graphics
-2. Explosions graphics
-3. Add asteroids to main screen
-4. Make Ship easier to use (shoot and move at same time)
+1. Explosions graphics
+2. Add asteroids to main screen
+3. Make Ship easier to use (shoot and move at same time)
 
 Nice to have
 -------------
@@ -28,5 +25,6 @@ Add exit game (Done 3/2/16)
 Stop volume when game finishes (Done 3/2/16)
 Make the little Asteroids go faster (Done 3/2/16)
 Instruction screen (Done 5/1/16)
+Thruster graphics (Done 4/2/16)
 
 
