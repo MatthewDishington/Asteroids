@@ -9,6 +9,8 @@ import math
 import time
 import sqlite3
 import re
+import webbrowser
+import os
 
 # pygame.init()
 pygame.mixer.init()
@@ -30,6 +32,7 @@ def _create_circle(self, x, y, r, **kwargs):
 
 
 class ScoreDatabase:
+
     def __init__(self):
         self.connection = sqlite3.connect('Asteroid.sqlite')
         self.cursor = self.connection.cursor()
@@ -50,6 +53,21 @@ class ScoreDatabase:
         );
 
         ''')
+
+    def get_high_scores(self):
+        highscores=[]
+        position=0
+        self.cursor.execute('''SELECT U.name,S.score
+                            FROM User U JOIN Score S ON S.user_id =U.id
+                            ORDER BY S.score DESC LIMIT  10''')
+
+        rows = self.cursor.fetchall()
+
+        for row in rows:
+            position+=1
+            highscores.append((position, row[0], row[1]))
+
+        return highscores
 
     def save_score(self, name, score):
         self.cursor.execute('''INSERT OR IGNORE INTO User (name)
@@ -391,6 +409,7 @@ class Asteroid(GameWorldObject):
 
         self.angle= random.randint(0,360)
         self.rotation_factor= random.randint(0,100) / 100.0 - 0.5
+
         if velocity_x is None:
             self.velocity_x = random.randint(0,100) / 100.0 - 0.5
         else:
@@ -450,16 +469,46 @@ class Bullet(GameWorldObject):
     def get_radius(self):
         return self.radius
 
-class Application(Frame):
+
+class Screen():
+
+    def __init__(self, frame, canvas):
+        self.frame=frame
+        self.canvas = canvas
+        self.backgroundImage = PhotoImage(file="nebula.gif")
+
+
+    def draw(self):
+        pass
+
+class MainScreen(Screen):
+
+    def __init__(self, frame, canvas):
+        Screen.__init__(self, frame, canvas)
+
+    def draw(self):
+        self.canvas.delete("all")
+        self.canvas.create_image(10, 10, image = self.backgroundImage, anchor = NW)
+        self.canvas.create_text(CANVAS_WIDTH/2,150, fill='White', text='ASTEROIDS', font=("Purisa", 65))
+
+        play_game_id=self.canvas.create_text(CANVAS_WIDTH/2, 350, fill='White', text='PLAY GAME', font=("Purisa", 25))
+        self.canvas.tag_bind(play_game_id, "<Button-1>", self.frame.play_game)
+
+        high_scores_id=self.canvas.create_text(CANVAS_WIDTH/2, 400, fill='White', text='HIGH SCORES', font=("Purisa", 25))
+        self.canvas.tag_bind(high_scores_id, "<Button-1>", self.frame.show_high_scores)
+
+        instructions_id=self.canvas.create_text(CANVAS_WIDTH/2, 450, fill='White', text='INSTRUCTIONS', font=("Purisa", 25))
+        self.canvas.tag_bind(instructions_id, "<Button-1>", self.frame.show_instructions)
+
+        exit_game_id=self.canvas.create_text(CANVAS_WIDTH/2, 500, fill='White', text='EXIT GAME', font=("Purisa", 25))
+        self.canvas.tag_bind(exit_game_id, "<Button-1>", sys.exit)
+
+class PlayGameScreen(Screen):
+
     draw_interval = int((1/60.0) * 1000) # refresh 60 times a second
 
-    def __init__(self, parent):
-        Frame.__init__(self, parent)
-        self.parent = parent
-        self.pack(fill=BOTH, expand=True)
-        self.canvas = Canvas(parent, width=CANVAS_WIDTH, height=CANVAS_HEIGHT, background='Black')
-        self.canvas.pack()
-        self.backgroundImage = PhotoImage(file="nebula.gif")
+    def __init__(self, frame, canvas):
+        Screen.__init__(self,frame, canvas)
         self.game_over = False
 
         ship = Ship()
@@ -468,6 +517,7 @@ class Application(Frame):
         self.level = 1
         self.create_new_wave()
 
+        parent = frame.get_parent()
         parent.bind('<Left>',ship.rotate_left)
         parent.bind('<Right>',ship.rotate_right)
         parent.bind('<Up>', ship.accelerate)
@@ -503,11 +553,11 @@ class Application(Frame):
                     size = asteroid.get_size()
                     if size < 3:
                         a1 = Asteroid(size + 1, asteroid.get_x(), asteroid.get_y(),
-                                      asteroid.get_velocity_y() * -2, asteroid.get_velocity_x() * 2)
+                                      asteroid.get_velocity_y() * -2 * size, asteroid.get_velocity_x() * 2 * size)
                         self.asteroids.add(a1)
 
                         a2 = Asteroid(size + 1, asteroid.get_x(), asteroid.get_y(),
-                                      asteroid.get_velocity_y() * 2, asteroid.get_velocity_x() * -2)
+                                      asteroid.get_velocity_y() * 2 * size, asteroid.get_velocity_x() * -2 * size)
 
                         self.asteroids.add(a2)
 
@@ -548,11 +598,16 @@ class Application(Frame):
 
         # Print game over message if needed
         if self.game_over == True:
+            fire_sound.stop()
+            thrust_sound.stop()
+            explosion_sound.stop()
             self.canvas.create_text(CANVAS_WIDTH/2, CANVAS_HEIGHT/2, text="GAME OVER", fill="White", font=("Purisa", 20) )
             self.capture_name()
 
+
+
         if self.game_over == False:
-            self.parent.after(self.draw_interval, self.draw) # set timer to refresh screen
+            self.frame.get_parent().after(self.draw_interval, self.draw) # set timer to refresh screen
 
 
     #New Wave
@@ -579,6 +634,8 @@ class Application(Frame):
     def save_score (self, event):
         name = self.name_entry.get()
         valid = re.match('^\w+$',name) is not None
+        name = name.upper()
+
         if not valid:
             tkMessageBox.showinfo("Invalid", "Invalid user name")
             self.name_entry.delete(0,END)
@@ -586,14 +643,82 @@ class Application(Frame):
         else:
             score = self.ship.get_score()
             scores.save_score(name,score)
+            self.frame.show_high_scores(None)
+
+class HighScoresScreen(Screen):
+
+    def __init__(self, frame, canvas):
+        Screen.__init__(self,frame, canvas)
+
+    def draw(self):
+        self.canvas.delete("all")
+        self.canvas.create_image(10, 10, image = self.backgroundImage, anchor = NW)
+        self.canvas.create_text(CANVAS_WIDTH/2,50, fill='White', text='HIGH SCORES', font=("Purisa", 65))
+        heading='   NAME                    SCORE'
+        self.canvas.create_text(100,150, fill='White', text=heading, font=("Courier", 25), anchor=W)
+
+        score_format="{0} {1} {2}"
+        y_position=150
+
+        high_scores = self.frame.get_high_scores()
+        for score in high_scores:
+            y_position+=40
+            rank = str(score[0]).rjust(2)
+            name = score[1].upper().ljust(20)
+            score = str(score[2]).rjust(8)
+            score_string = score_format.format(rank,name, score )
+            print score_string
+            self.canvas.create_text(100,y_position, fill='White', text=score_string, font=("Courier", 25), anchor=W)
+
+        back_id=self.canvas.create_text(CANVAS_WIDTH/2, 650, fill='White', text='BACK TO MAIN MENU', font=("Purisa", 25))
+        self.canvas.tag_bind(back_id, "<Button-1>", self.frame.show_main_screen)
+
+
+class Application(Frame):
+    def __init__(self, parent):
+        Frame.__init__(self, parent)
+        self.parent = parent
+        self.pack(fill=BOTH, expand=True)
+        self.canvas = Canvas(parent, width=CANVAS_WIDTH, height=CANVAS_HEIGHT, background='Black')
+        self.canvas.pack()
+        self.hs = []
+        self.screen = None
+        self.show_main_screen(None)
+
+    def get_parent(self):
+        return self.parent
+
+    def load_high_scores(self):
+        db=ScoreDatabase()
+        self.hs=db.get_high_scores()
+
+    def get_high_scores(self):
+        return self.hs
+
+    def show_main_screen(self, event):
+        self.screen = MainScreen(self, self.canvas)
+        self.screen.draw()
+
+    def show_high_scores(self, event):
+        self.load_high_scores()
+        self.screen = HighScoresScreen(self,self.canvas)
+        self.screen.draw()
+
+    def show_instructions(self, event):
+        webbrowser.open_new('file://' + os.path.realpath('help.html'))
+
+    def play_game(self, event):
+        self.screen = PlayGameScreen(self,self.canvas)
+        self.screen.draw()
+
+
+scores=ScoreDatabase()
+scores.create_database()
 
 root = Tk()
 Canvas.create_circle = _create_circle
 
 root.title( "Asteroids")
-
 app = Application(root)
-scores=ScoreDatabase()
-scores.create_database()
 
 root.mainloop()
