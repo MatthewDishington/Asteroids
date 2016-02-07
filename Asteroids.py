@@ -170,9 +170,9 @@ class GameWorldObject:
 class Ship(GameWorldObject):
     def __init__(self):
         GameWorldObject.__init__(self)
-        self.acceleration_factor = 0.5
+        self.acceleration_factor = 0.7
         self.drag_factor = 0.02
-        self.rotation_factor = 15
+        self.rotation_factor = 20
         self.score = 0
         self.active = True
         self.reactivate_time = 0
@@ -469,8 +469,8 @@ class Bullet(GameWorldObject):
         self.y += self.velocity_y * 20
 
         # Bullet movement speed factor
-        self.velocity_x *= 5
-        self.velocity_y *= 5
+        self.velocity_x *= 7
+        self.velocity_y *= 7
 
         # No rotation or rotational speed
         self.rotation_factor = 0
@@ -500,11 +500,23 @@ class Screen():
 
 class MainScreen(Screen):
 
+    draw_interval = int((1/60.0) * 1000)
+
     def __init__(self, frame, canvas):
         Screen.__init__(self, frame, canvas)
+        self.asteroids = set([])
+        for i in range(0,4):
+            velocity_x = random.randint(50,100) / 100.0 - 0.2
+            velocity_y = random.randint(50,100) / 100.0 - 0.2
+
+            self.asteroids.add(Asteroid(1,velocity_x=velocity_x,velocity_y=velocity_y))
 
     def draw(self):
         self.canvas.delete("all")
+
+        for asteroid in set(self.asteroids):
+            asteroid.update()
+
         self.canvas.create_image(10, 10, image = self.backgroundImage, anchor = NW)
         self.canvas.create_text(CANVAS_WIDTH/2,150, fill='White', text='ASTEROIDS', font=("Purisa", 65))
 
@@ -519,6 +531,12 @@ class MainScreen(Screen):
 
         exit_game_id=self.canvas.create_text(CANVAS_WIDTH/2, 500, fill='White', text='EXIT GAME', font=("Purisa", 25))
         self.canvas.tag_bind(exit_game_id, "<Button-1>", sys.exit)
+
+        for asteroid in self.asteroids:
+            asteroid.draw(self.canvas)
+
+        if self.frame.screen == self:
+            self.frame.get_parent().after(self.draw_interval, self.draw) # set timer to refresh screen
 
 class PlayGameScreen(Screen):
 
@@ -621,8 +639,6 @@ class PlayGameScreen(Screen):
             self.canvas.create_text(CANVAS_WIDTH/2, CANVAS_HEIGHT/2, text="GAME OVER", fill="White", font=("Purisa", 20) )
             self.capture_name()
 
-
-
         if self.game_over == False:
             self.frame.get_parent().after(self.draw_interval, self.draw) # set timer to refresh screen
 
@@ -684,7 +700,6 @@ class HighScoresScreen(Screen):
             name = score[1].upper().ljust(20)
             score = str(score[2]).rjust(8)
             score_string = score_format.format(rank,name, score )
-            print score_string
             self.canvas.create_text(100,y_position, fill='White', text=score_string, font=("Courier", 25), anchor=W)
 
         back_id=self.canvas.create_text(CANVAS_WIDTH/2, 650, fill='White', text='BACK TO MAIN MENU', font=("Purisa", 25))
