@@ -512,6 +512,9 @@ class MainScreen(Screen):
             self.asteroids.add(Asteroid(1,velocity_x=velocity_x,velocity_y=velocity_y))
 
     def draw(self):
+        if self.frame.screen != self:
+            return
+
         self.canvas.delete("all")
 
         for asteroid in set(self.asteroids):
@@ -621,6 +624,10 @@ class PlayGameScreen(Screen):
             self.create_new_wave()
 
     def draw(self):
+
+        if self.frame.screen != self:
+            return
+
         self.update_objects()
         self.canvas.delete('all')
         self.canvas.create_image(10, 10, image = self.backgroundImage, anchor = NW)
@@ -732,8 +739,9 @@ class Application(Frame):
         self.screen.draw()
 
     def show_high_scores(self, event):
-        self.load_high_scores()
         self.screen = HighScoresScreen(self,self.canvas)
+        self.screen.draw()
+        self.load_high_scores()
         self.screen.draw()
 
     def show_instructions(self, event):
@@ -750,7 +758,13 @@ scores.create_database()
 root = Tk()
 Canvas.create_circle = _create_circle
 
-root.title( "Asteroids")
+root.title("Asteroids")
 app = Application(root)
+
+def on_closing():
+        print "In on_closing"
+        root.destroy()
+
+root.protocol('WM_DELETE_WINDOW', on_closing)
 
 root.mainloop()
