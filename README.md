@@ -10,7 +10,16 @@ To do:
 
 Nice to have
 -------------
-Flying saucers
+Flying saucers:
+Faster Moving
+More bullets
+Can follow the spaceship
+Can go from top to bottom or left to right
+More then one at a time
+
+
+
+
 Make two person game
 
 
