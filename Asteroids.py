@@ -22,7 +22,8 @@ CANVAS_WIDTH = 700
 CANVAS_HEIGHT = 700
 SCORE = {1:10, 2:50, 3:100}
 FLYING_SAUCER_SCORE = 500
-SAUCER_LEVEL = 3
+FALCON_SCORE = 750
+SAUCER_LEVEL = 1
 
 def get_tick_count():
     return int(round(time.time() * 1000))
@@ -382,7 +383,7 @@ class Ship(GameWorldObject):
         self.invincibility = True
         self.last_shield_time = get_tick_count()
 
-class Saucer(GameWorldObject):
+class EnemyShip(GameWorldObject):
     def __init__(self,ship):
 
         # Bullets:
@@ -395,36 +396,18 @@ class Saucer(GameWorldObject):
         # Saucer
         self.ship = ship
         # saucer_sound.play(loops=-1)
-        self.radius = 10
         self.last_changed=get_tick_count()
         self.interval= random.randint(100,5000)
-
-        self.shape = ((-10,2),(10,2),(6,6), (-6,6), (-10,2), (-4,-2),(4,-2),
-                        (-4,-2),(-4,-4),
-                        (4,-4), (4,-2), (10,2))
-
-        self.velocity_x = random.randint(200,400) / 100
-        if random.randint(0,1) == 0:
-            self.x = 0
-        else:
-            self.x=CANVAS_WIDTH -1
-            self.velocity_x *= -1
-
-        self.y = random.randint(0,CANVAS_HEIGHT)
-        self.velocity_y = random.randint(200,400) / 100.0 - 0.5
-
         self.drag_factor=0
-        self.angle=0
         self.colour='White'
-        self.update()
+
+
+    def set_initial_position_and_velocity(self):
+        pass
 
     def update(self):
-        current_time = int(round(time.time() * 1000))
 
-        if current_time > self.last_changed + self.interval:
-            self.velocity_y *= -1
-            self.last_changed=int(round(time.time() * 1000))
-            self.interval = random.randint(100,5000)
+        current_time = get_tick_count()
 
         if current_time > self.last_bullet_time + self.bullet_interval:
             self.fire()
@@ -455,7 +438,7 @@ class Saucer(GameWorldObject):
             y = self.ship.get_y() - self.y
 
             radians = math.atan2(x,y)
-            speed = 0.8
+            speed = 1.2
             velocity_x = speed * math.sin(radians)
             velocity_y = speed * math.cos(radians)
 
@@ -476,9 +459,113 @@ class Saucer(GameWorldObject):
     def destroy(self):
         saucer_sound.stop()
 
-
     def get_bullets(self):
         return list(self.bullets)
+
+    def get_points(self):
+        pass
+
+class Saucer(EnemyShip):
+    def __init__(self,ship):
+
+        EnemyShip.__init__(self,ship)
+
+        self.radius = 10
+        self.angle=0
+        self.shape = ((-10,2),(10,2),(6,6), (-6,6), (-10,2), (-4,-2),(4,-2),
+                        (-4,-2),(-4,-4),
+                        (4,-4), (4,-2), (10,2))
+        self.set_initial_position_and_velocity()
+        self.update()
+
+    def get_points(self):
+        return FLYING_SAUCER_SCORE
+
+    def set_initial_position_and_velocity(self):
+        self.velocity_x = random.randint(200,400) / 100
+        if random.randint(0,1) == 0:
+            self.x = 0
+        else:
+            self.x=CANVAS_WIDTH -1
+            self.velocity_x *= -1
+
+        self.y = random.randint(0,CANVAS_HEIGHT)
+        self.velocity_y = random.randint(200,400) / 100.0 - 0.5
+
+    def update(self):
+
+        current_time = int(round(time.time() * 1000))
+
+        if current_time > self.last_changed + self.interval:
+            self.velocity_y *= -1
+            self.last_changed=int(round(time.time() * 1000))
+            self.interval = random.randint(100,5000)
+
+        EnemyShip.update(self)
+
+class Falcon(EnemyShip):
+    def __init__(self,ship):
+
+        EnemyShip.__init__(self,ship)
+        self.speed = 5
+        self.radius = 20
+
+        self.shape = ((20,5), (20,10), (15,10), (5,20), (-10,20), (-20,10), (-20,-10), (-10,-20), (5,-20), (15,-10),
+                      (20,-10), (20,-5), (10,-5), (10,5), (20,5))
+
+        self.set_initial_position_and_velocity()
+        self.interval= 1000
+        self.update()
+
+    def set_initial_position_and_velocity(self):
+        self.velocity_x = random.randint(200,400) / 100
+        self.velocity_y = random.randint(200,400) / 100.0 - 0.5
+        choice = random.randint(0,3)
+
+        if choice == 0:
+            self.x = random.randint(0,CANVAS_WIDTH)
+            self.y = 0
+        elif choice == 1:
+            self.x = CANVAS_WIDTH
+            self.y = random.randint(0,CANVAS_HEIGHT)
+            self.velocity_x *= -1
+        elif choice == 2:
+            self.x = random.randint(0,CANVAS_WIDTH)
+            self.y = CANVAS_HEIGHT
+            self.velocity_y *= -1
+        else:
+            self.x = 0
+            self.y = random.randint(0,CANVAS_HEIGHT)
+
+        radians = math.atan2(self.velocity_y,
+                             self.velocity_x)
+        self.angle = math.degrees(radians)
+
+    def get_points(self):
+        return FALCON_SCORE
+
+    def update(self):
+
+        current_time = get_tick_count()
+
+        if current_time > self.last_changed + self.interval:
+            x = self.ship.get_x() - self.x
+            y = self.ship.get_y() - self.y
+            radians = math.atan2(y,x)
+            self.angle = math.degrees(radians)
+            self.velocity_x = self.speed * math.cos(radians)
+            self.velocity_y = self.speed * math.sin(radians)
+            self.last_changed=int(round(time.time() * 1000))
+
+        EnemyShip.update(self)
+
+
+class Fighter(EnemyShip):
+    def __init__(self):
+
+        self.shape = ((25,0), (5,5), (5,20),(15,20),(-5,20), (0,20), (-5,5), (-10,0), (-5,-5), (0,-20), (-5,-20), (15,-20),
+                      (15,-20), (5,-20), (5,-5), (25,0))
+
 
 class Asteroid(GameWorldObject):
     def __init__(self, size, x = None, y = None, velocity_x = None, velocity_y = None):
@@ -657,10 +744,12 @@ class PlayGameScreen(Screen):
 
         ship = Ship()
         self.addShip(ship)
-        self.saucer = None
+        self.enemy_ship = None
         self.asteroids = set([])
         self.level = 1
         self.create_new_wave()
+        self.last_enemy_ship_time = get_tick_count()
+        self.enemy_ship_interval = random.randint(2000,20000)
 
         parent = frame.get_parent()
         parent.bind('<Left>',ship.rotate_left)
@@ -669,6 +758,7 @@ class PlayGameScreen(Screen):
         parent.bind('<space>', ship.fire)
         parent.bind('<KeyRelease-space>', ship.reset_bullet_cooldown)
         parent.bind('<s>', ship.handle_activate_shield_event)
+
         self.draw()
 
     def addShip(self, ship):
@@ -683,8 +773,8 @@ class PlayGameScreen(Screen):
 
         self.ship.update()
 
-        if self.saucer != None:
-            self.saucer.update()
+        if self.enemy_ship != None:
+            self.enemy_ship.update()
 
         for asteroid in set(self.asteroids):
             asteroid.update()
@@ -692,33 +782,40 @@ class PlayGameScreen(Screen):
         #Check for collisions
 
         #Collision with Saucer and Ships Bullets
-        if self.saucer != None:
+        if self.enemy_ship is not None:
             bullets = self.ship.get_bullets()
             for bullet in bullets:
-                if bullet.is_collision(self.saucer):
+                if bullet.is_collision(self.enemy_ship):
                     explosion_sound.play()
-                    self.saucer.destroy()
-                    self.ship.add_points(FLYING_SAUCER_SCORE)
+                    points = self.enemy_ship.get_points()
+                    self.ship.add_points(points)
                     self.ship.remove_bullet(bullet)
-                    self.saucer_interval = random.randint(2000,20000)
-                    self.last_saucer_time = get_tick_count()
+                    self.enemy_ship.destroy()
+                    self.enemy_ship = None
+                    self.enemy_ship_interval = random.randint(2000,20000)
+                    self.last_enemy_ship_time = get_tick_count()
+                    break
 
-        # Collision with Saucer and Ship
+        # Collision with Enemy Ship and Players Ship
+        if self.enemy_ship is not None:
             if not self.ship.is_invincible():
-                if self.saucer.is_collision(self.ship):
+                if self.enemy_ship.is_collision(self.ship):
                     explosion_sound.play()
                     self.ship_destroyed()
-                    self.saucer.destroy()
-                    self.saucer_interval = random.randint(2000,20000)
-                    self.last_saucer_time = get_tick_count()
+                    self.enemy_ship.destroy()
+                    self.enemy_ship = None
+                    self.enemy_ship_interval = random.randint(2000,20000)
+                    self.last_enemy_ship_time = get_tick_count()
 
-        # Collision with Ship and Saucer Bullet
+        # Collision with Players Ship and Enemy Ship Bullet
+        if self.enemy_ship is not None:
             if not self.ship.is_invincible():
-                bullets = self.saucer.get_bullets()
+                bullets = self.enemy_ship.get_bullets()
                 for bullet in bullets:
                     if bullet.is_collision(self.ship):
                         self.ship_destroyed()
-                        self.saucer.remove_bullet(bullet)
+                        self.enemy_ship.remove_bullet(bullet)
+                        break
 
         for asteroid in set(self.asteroids):
 
@@ -755,8 +852,8 @@ class PlayGameScreen(Screen):
             self.level += 1
             self.create_new_wave()
             if self.level == SAUCER_LEVEL:
-                self.saucer_interval = random.randint(2000,20000)
-                self.last_saucer_time = get_tick_count()
+                self.enemy_ship_interval = random.randint(2000,20000)
+                self.last_enemy_ship_time = get_tick_count()
 
 
     def ship_destroyed(self):
@@ -778,14 +875,11 @@ class PlayGameScreen(Screen):
         self.canvas.create_image(10, 10, image = self.backgroundImage, anchor = NW)
         self.ship.draw(self.canvas)
 
-        if self.level == SAUCER_LEVEL:
-            if self.saucer == None:
-                current_time = get_tick_count()
-                if current_time > self.last_saucer_time + self.saucer_interval:
-                     self.saucer = Saucer(self.ship)
+        # Saucer Creation
+        self.create_enemy_ship()
 
-        if self.saucer != None:
-            self.saucer.draw(self.canvas)
+        if self.enemy_ship != None:
+            self.enemy_ship.draw(self.canvas)
 
         for asteroid in self.asteroids:
             asteroid.draw(self.canvas)
@@ -839,6 +933,14 @@ class PlayGameScreen(Screen):
             score = self.ship.get_score()
             scores.save_score(name,score)
             self.frame.show_high_scores(None)
+
+    def create_enemy_ship(self):
+        if self.enemy_ship is None:
+            if self.level == SAUCER_LEVEL:
+                current_time = get_tick_count()
+                if current_time > self.last_enemy_ship_time + self.enemy_ship_interval:
+                     # self.saucer = Saucer(self.ship)
+                    self.enemy_ship = Falcon(self.ship)
 
 class HighScoresScreen(Screen):
 
