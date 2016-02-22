@@ -26,7 +26,7 @@ FALCON_SCORE = 750
 FIGHTER_SCORE = 1000
 
 
-def get_tick_count():
+def get_current_time():
     return int(round(time.time() * 1000))
 
 def _create_circle(self, x, y, r, **kwargs):
@@ -168,7 +168,7 @@ class GameWorldObject:
         return self.radius
 
 
-class Ship(GameWorldObject):
+class PlayerShip(GameWorldObject):
     def __init__(self):
         GameWorldObject.__init__(self)
         self.acceleration_factor = 0.7
@@ -226,7 +226,7 @@ class Ship(GameWorldObject):
 
         #Make invincible
         self.invincibility = True
-        self.last_shield_time = get_tick_count()
+        self.last_shield_time = get_current_time()
 
     def set_active(self,active):
         self.active = active
@@ -253,7 +253,7 @@ class Ship(GameWorldObject):
         self.velocity_y -= y * self.acceleration_factor
 
         # if not self.thrust_sound_playing:
-        self.thrust_sound_last_played = get_tick_count()
+        self.thrust_sound_last_played = get_current_time()
         if not self.thrust_sound_playing:
             self.thrust_sound_playing = True
             thrust_sound.play(loops=-1)
@@ -261,13 +261,13 @@ class Ship(GameWorldObject):
     def update(self):
         # check if ship is action
         if self.active == False:
-            if get_tick_count() < self.reactivate_time:
+            if get_current_time() < self.reactivate_time:
                 return
             self.active = True
             self.reset()
 
         #Update shield flag
-        self.invincibility = (get_tick_count() - self.last_shield_time) < self.shield_duration
+        self.invincibility = (get_current_time() - self.last_shield_time) < self.shield_duration
 
         for bullet in set(self.bullets):
             if bullet.remove():
@@ -281,7 +281,7 @@ class Ship(GameWorldObject):
     def draw(self,canvas):
 
         if self.thrust_sound_playing:
-            if get_tick_count() - self.thrust_sound_last_played > self.thrust_sound_duration:
+            if get_current_time() - self.thrust_sound_last_played > self.thrust_sound_duration:
                 self.thrust_sound_playing = False
                 thrust_sound.stop()
 
@@ -306,7 +306,7 @@ class Ship(GameWorldObject):
         #Indicate if shield available
         canvas.create_text(50, CANVAS_HEIGHT - 20, text='Shield', fill="White")
         colour = 'Red'
-        if (get_tick_count() - self.last_shield_time) > self.shield_cool_down:
+        if (get_current_time() - self.last_shield_time) > self.shield_cool_down:
             if not self.invincibility:
                 colour='Green'
         canvas.create_rectangle(80, CANVAS_HEIGHT - 15, 90, CANVAS_HEIGHT - 25, fill=colour)
@@ -326,7 +326,7 @@ class Ship(GameWorldObject):
             return
 
         # Dont fire unless the cooldown period has expired
-        if (get_tick_count() - self.last_bullet_time >= self.bullet_cool_down):
+        if (get_current_time() - self.last_bullet_time >= self.bullet_cool_down):
 
             #Dont fire if the maximum number of bullets are already on scren
             if self.bullets_used < self.max_bullets:
@@ -336,7 +336,7 @@ class Ship(GameWorldObject):
                 self.bullets.add(bullet)
 
                 #Last bullet fired now
-                self.last_bullet_time = get_tick_count()
+                self.last_bullet_time = get_current_time()
                 self.bullets_used += 1
 
                 #Play fire sound
@@ -361,7 +361,7 @@ class Ship(GameWorldObject):
 
     def make_inactive_for(self, milliseconds):
         self.active = False
-        self.reactivate_time = get_tick_count() + milliseconds
+        self.reactivate_time = get_current_time() + milliseconds
 
     def get_lives(self):
         return self.lives
@@ -377,7 +377,7 @@ class Ship(GameWorldObject):
 
     def handle_activate_shield_event(self, event):
         if not self.invincibility:
-            if get_tick_count() - self.last_shield_time > self.shield_cool_down:
+            if get_current_time() - self.last_shield_time > self.shield_cool_down:
                 self.activate_shield()
 
     def is_invincible(self):
@@ -385,22 +385,22 @@ class Ship(GameWorldObject):
 
     def activate_shield(self):
         self.invincibility = True
-        self.last_shield_time = get_tick_count()
+        self.last_shield_time = get_current_time()
 
 class EnemyShip(GameWorldObject):
     def __init__(self,ship):
 
         # Bullets:
         self.bullets_used = 0
-        self.last_bullet_time = get_tick_count()
+        self.last_bullet_time = get_current_time()
         self.bullet_interval = random.randint(500,2000)
         self.max_bullets = 1 # Number of bullets allowed on screen
         self.bullets = set()
 
         # Saucer
         self.ship = ship
-        # saucer_sound.play(loops=-1)
-        self.last_changed=get_tick_count()
+        saucer_sound.play(loops=-1)
+        self.last_changed=get_current_time()
         self.interval= random.randint(100,5000)
         self.drag_factor=0
         self.colour='White'
@@ -433,7 +433,7 @@ class EnemyShip(GameWorldObject):
 
     def update(self):
 
-        current_time = get_tick_count()
+        current_time = get_current_time()
 
         if current_time > self.last_bullet_time + self.bullet_interval:
             self.fire()
@@ -472,7 +472,7 @@ class EnemyShip(GameWorldObject):
             self.bullets.add(bullet)
 
             #Last bullet fired now
-            self.last_bullet_time = get_tick_count()
+            self.last_bullet_time = get_current_time()
             self.bullets_used += 1
 
             #Play fire sound
@@ -520,11 +520,11 @@ class Saucer(EnemyShip):
 
     def update(self):
 
-        current_time = get_tick_count()
+        current_time = get_current_time()
 
         if current_time > self.last_changed + self.interval:
             self.velocity_y *= -1
-            self.last_changed=get_tick_count()
+            self.last_changed=get_current_time()
             self.interval = random.randint(100,5000)
 
         EnemyShip.update(self)
@@ -548,7 +548,7 @@ class Falcon(EnemyShip):
 
     def update(self):
 
-        current_time = get_tick_count()
+        current_time = get_current_time()
 
         if current_time > self.last_changed + self.interval:
             x = self.ship.get_x() - self.x
@@ -557,7 +557,7 @@ class Falcon(EnemyShip):
             self.angle = math.degrees(radians)
             self.velocity_x = self.speed * math.cos(radians)
             self.velocity_y = self.speed * math.sin(radians)
-            self.last_changed=get_tick_count()
+            self.last_changed=get_current_time()
 
         EnemyShip.update(self)
 
@@ -609,7 +609,7 @@ class Fighter(EnemyShip):
 
 
             #Last bullet fired now
-            self.last_bullet_time = get_tick_count()
+            self.last_bullet_time = get_current_time()
             self.bullets_used += 1
 
             #Play fire sound
@@ -620,7 +620,7 @@ class Fighter(EnemyShip):
 
     def update(self):
 
-        current_time = get_tick_count()
+        current_time = get_current_time()
 
         if current_time > self.last_changed + self.interval:
             x = self.ship.get_x() - self.x
@@ -629,7 +629,7 @@ class Fighter(EnemyShip):
             self.angle = math.degrees(radians)
             self.velocity_x = self.speed * math.cos(radians)
             self.velocity_y = self.speed * math.sin(radians)
-            self.last_changed=get_tick_count()
+            self.last_changed=get_current_time()
 
         EnemyShip.update(self)
 
@@ -679,12 +679,12 @@ class Asteroid(GameWorldObject):
         self.rotation_factor= random.randint(0,100) / 100.0 - 0.5
 
         if velocity_x is None:
-            self.velocity_x = random.randint(0,100) / 100.0 - 0.5
+            self.velocity_x = random.randint(100,150) / 100.0 - 0.5
         else:
             self.velocity_x = velocity_x
 
         if velocity_y is None:
-            self.velocity_y = random.randint(0,100) / 100.0 - 0.5
+            self.velocity_y = random.randint(100,150) / 100.0 - 0.5
         else:
             self.velocity_y = velocity_y
 
@@ -711,12 +711,12 @@ class Bullet(GameWorldObject):
         if velocity_x is None:
             self.velocity_x = math.sin(2 * math.pi * (ship.get_angle()/360.0))
         else:
-            self.velocity_x=velocity_x
+            self.velocity_x = velocity_x
 
         if velocity_y is None:
             self.velocity_y = -math.cos(2 * math.pi * (ship.get_angle()/360.0))
         else:
-            self.velocity_y=velocity_y
+            self.velocity_y = velocity_y
 
         if x is None:
             #Initial position of the bullet should be the ships center point
@@ -735,24 +735,23 @@ class Bullet(GameWorldObject):
             self.y = y
 
         # Bullet movement speed factor
-        self.velocity_x *= 7
-        self.velocity_y *= 7
+        self.velocity_x *= 10
+        self.velocity_y *= 10
 
         # No rotation or rotational speed
         self.rotation_factor = 0
         self.drag_factor = 0
 
-        self.created_time = get_tick_count()
-        self.time_to_live = 2000
+        self.created_time = get_current_time()
+        self.time_to_live = 1400
         self.update()
 
     def remove(self):
     # Remove a bullet if its Time To Live has expired
-        return get_tick_count() - self.created_time > self.time_to_live
+        return get_current_time() - self.created_time > self.time_to_live
 
     def get_radius(self):
         return self.radius
-
 
 class Screen():
 
@@ -816,13 +815,13 @@ class PlayGameScreen(Screen):
         Screen.__init__(self,frame, canvas)
         self.game_over = False
 
-        ship = Ship()
+        ship = PlayerShip()
         self.addShip(ship)
         self.enemy_ships = set([])
         self.asteroids = set([])
         self.level = 1
         self.create_new_wave()
-        self.last_enemy_ship_time = get_tick_count()
+        self.last_enemy_ship_time = get_current_time()
         self.enemy_ship_interval = random.randint(2000,20000)
 
         parent = frame.get_parent()
@@ -836,7 +835,7 @@ class PlayGameScreen(Screen):
         self.draw()
 
     def addShip(self, ship):
-        self.ship = ship
+        self.player_ship = ship
 
     def update_objects(self):
 
@@ -845,7 +844,7 @@ class PlayGameScreen(Screen):
 
         # Update game objects
 
-        self.ship.update()
+        self.player_ship.update()
 
         for enemy_ship in self.enemy_ships:
             enemy_ship.update()
@@ -857,37 +856,37 @@ class PlayGameScreen(Screen):
 
         #Collision with Enemy ship and Ships Bullets
         for enemy_ship in set(self.enemy_ships):
-            bullets = self.ship.get_bullets()
+            bullets = self.player_ship.get_bullets()
             for bullet in bullets:
                 if bullet.is_collision(enemy_ship):
                     explosion_sound.play()
                     points = enemy_ship.get_points()
-                    self.ship.add_points(points)
-                    self.ship.remove_bullet(bullet)
+                    self.player_ship.add_points(points)
+                    self.player_ship.remove_bullet(bullet)
                     enemy_ship.destroy()
                     self.enemy_ships.remove(enemy_ship)
                     self.enemy_ship_interval = random.randint(2000,20000)
-                    self.last_enemy_ship_time = get_tick_count()
+                    self.last_enemy_ship_time = get_current_time()
                     break
 
         # Collision with Enemy Ship and Players Ship
-        if self.ship.is_active() and not self.ship.is_invincible():
+        if self.player_ship.is_active() and not self.player_ship.is_invincible():
             for enemy_ship in set(self.enemy_ships):
-                if enemy_ship.is_collision(self.ship):
+                if enemy_ship.is_collision(self.player_ship):
                     explosion_sound.play()
                     self.ship_destroyed()
                     enemy_ship.destroy()
                     self.enemy_ships.remove(enemy_ship)
                     self.enemy_ship_interval = random.randint(2000,20000)
-                    self.last_enemy_ship_time = get_tick_count()
+                    self.last_enemy_ship_time = get_current_time()
                     break
 
         # Collision with Players Ship and Enemy Ship Bullet
-        if self.ship.is_active() and  not self.ship.is_invincible():
+        if self.player_ship.is_active() and  not self.player_ship.is_invincible():
             for enemy_ship in set(self.enemy_ships):
                 bullets = enemy_ship.get_bullets()
                 for bullet in bullets:
-                    if bullet.is_collision(self.ship):
+                    if bullet.is_collision(self.player_ship):
                         self.ship_destroyed()
                         enemy_ship.remove_bullet(bullet)
                         break
@@ -895,32 +894,32 @@ class PlayGameScreen(Screen):
         for asteroid in set(self.asteroids):
 
             #Compare each bullet against Asteroid
-            bullets = self.ship.get_bullets()
+            bullets = self.player_ship.get_bullets()
             for bullet in bullets:
                 if bullet.is_collision(asteroid):
                     explosion_sound.play()
                     size = asteroid.get_size()
                     if size < 3:
                         a1 = Asteroid(size + 1, asteroid.get_x(), asteroid.get_y(),
-                                      asteroid.get_velocity_y() * -2 * size, asteroid.get_velocity_x() * 2 * size)
+                                      asteroid.get_velocity_y() * -1.25 * size, asteroid.get_velocity_x() * 1.25 * size)
                         self.asteroids.add(a1)
 
                         a2 = Asteroid(size + 1, asteroid.get_x(), asteroid.get_y(),
-                                      asteroid.get_velocity_y() * 2 * size, asteroid.get_velocity_x() * -2 * size)
+                                      asteroid.get_velocity_y() * 1.25 * size, asteroid.get_velocity_x() * -1.25 * size)
 
                         self.asteroids.add(a2)
 
                     #Update Score
                     points=SCORE[asteroid.get_size()]
-                    self.ship.add_points(points)
+                    self.player_ship.add_points(points)
                     if asteroid in self.asteroids:
                         self.asteroids.remove(asteroid)
-                    self.ship.remove_bullet(bullet)
+                    self.player_ship.remove_bullet(bullet)
 
 
             #Compare ship against Asteroid
-            if self.ship.is_active() and not self.ship.is_invincible() :
-                if self.ship.is_collision(asteroid):
+            if self.player_ship.is_active() and not self.player_ship.is_invincible() :
+                if self.player_ship.is_collision(asteroid):
                     self.ship_destroyed()
 
         if len(self.asteroids) == 0:
@@ -929,12 +928,12 @@ class PlayGameScreen(Screen):
 
     def ship_destroyed(self):
         explosion_sound.play()
-        self.ship.remove_live()
-        if self.ship.get_lives() <= 0:
-            self.ship.set_active(False)
+        self.player_ship.remove_live()
+        if self.player_ship.get_lives() <= 0:
+            self.player_ship.set_active(False)
             self.game_over=True
         else:
-            self.ship.make_inactive_for(350)
+            self.player_ship.make_inactive_for(350)
 
     def draw(self):
 
@@ -944,7 +943,7 @@ class PlayGameScreen(Screen):
         self.update_objects()
         self.canvas.delete('all')
         self.canvas.create_image(10, 10, image = self.backgroundImage, anchor = NW)
-        self.ship.draw(self.canvas)
+        self.player_ship.draw(self.canvas)
 
         # Saucer Creation
         self.create_enemy_ship()
@@ -972,7 +971,7 @@ class PlayGameScreen(Screen):
 
     #New Wave
     def create_new_wave(self):
-        self.ship.activate_shield()
+        self.player_ship.activate_shield()
         for i in range(0,self.level + 2):
             self.asteroids.add(Asteroid(1))
 
@@ -1001,27 +1000,27 @@ class PlayGameScreen(Screen):
             self.name_entry.delete(0,END)
             self.name_entry.focus()
         else:
-            score = self.ship.get_score()
+            score = self.player_ship.get_score()
             scores.save_score(name,score)
             self.frame.show_high_scores(None)
 
     def create_enemy_ship(self):
 
-        current_time = get_tick_count()
+        current_time = get_current_time()
         if current_time > self.last_enemy_ship_time + self.enemy_ship_interval:
             fighter_level = 5
             if self.level >= fighter_level:
                 max_ships = self.level - fighter_level + 1
                 while len(self.enemy_ships) < max_ships:
-                    self.enemy_ships.add(Fighter(self.ship))
+                    self.enemy_ships.add(Fighter(self.player_ship))
                     self.last_enemy_ship_time = current_time
             elif self.level >= 4:
                   if len(self.enemy_ships) < 1:
-                    self.enemy_ships.add(Falcon(self.ship))
+                    self.enemy_ships.add(Falcon(self.player_ship))
                     self.last_enemy_ship_time = current_time
             elif self.level >= 3:
                 if len(self.enemy_ships) < 1:
-                    self.enemy_ships.add(Saucer(self.ship))
+                    self.enemy_ships.add(Saucer(self.player_ship))
                     self.last_enemy_ship_time = current_time
 
 
