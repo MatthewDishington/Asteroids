@@ -1,7 +1,6 @@
 __author__ = 'Matthew'
 
 
-import pygame
 from Tkinter import *
 import random
 import math
@@ -10,8 +9,45 @@ import sqlite3
 import re
 import webbrowser
 import os
+import pygame
 
-# pygame.init()
+root = Tk()
+
+if os.name == "posix": # e.g. mac
+    config={"bullet_speed_factor": 10,
+            "asteroid_speed_min": 100,
+            "asteroid_speed_max": 150,
+            "high_scores_size": 65,
+            "scores_size": 25,
+            "rotation_factor": 20,
+            "acceleration_factor": 0.7,
+            "label_and_entry_box_size": 20,
+            "enemy_ship_bullet_speed": 1.2,
+            "saucer_speed_min": 200,
+            "saucer_speed_max": 400,
+            "falcon_speed": 3,
+            "fighter_speed": 3
+
+
+            }
+else:
+    config={"bullet_speed_factor": 7,
+            "asteroid_speed_min": 75,
+            "asteroid_speed_max": 125,
+            "high_scores_size": 50,
+            "scores_size": 20,
+            "rotation_factor": 10,
+            "acceleration_factor": 0.4,
+            "wave_text_size": 15,
+            "label_and_entry_box_size": 15,
+            "enemy_ship_bullet_speed": 0.8,
+            "saucer_speed_min": 150,
+            "saucer_speed_max": 300,
+            "falcon_speed": 3,
+            "fighter_speed": 3
+            }
+
+pygame.init()
 pygame.mixer.init()
 fire_sound = pygame.mixer.Sound('fire.wav')
 thrust_sound = pygame.mixer.Sound('thrust.wav')
@@ -171,9 +207,11 @@ class GameWorldObject:
 class PlayerShip(GameWorldObject):
     def __init__(self):
         GameWorldObject.__init__(self)
-        self.acceleration_factor = 0.7
+        acceleration = config["acceleration_factor"]
+        self.acceleration_factor = acceleration
         self.drag_factor = 0.02
-        self.rotation_factor = 20
+        rotation = config["rotation_factor"]
+        self.rotation_factor = rotation
         self.score = 0
         self.active = True
         self.reactivate_time = 0
@@ -286,13 +324,13 @@ class PlayerShip(GameWorldObject):
                 thrust_sound.stop()
 
         #Draw lives
-        canvas.create_text(50,20, text='Lives:', fill='White' )
+        canvas.create_text(50,20, text='Lives:', fill='White', font=("Purisa", 15))
 
         for i in range(self.lives):
             canvas.create_circle((i * 15) + 35, 40, 5, fill="Green")
 
-        canvas.create_text(CANVAS_WIDTH - 50,20, text='Score:', fill='White' )
-        canvas.create_text(CANVAS_WIDTH - 50,40, text=str(self.score), fill='Blue' )
+        canvas.create_text(CANVAS_WIDTH - 50,20, text='Score:', fill='White', font=("Purisa", 15) )
+        canvas.create_text(CANVAS_WIDTH - 50,40, text=str(self.score), fill='Blue', font=("Purisa", 15) )
 
         if self.active:
             GameWorldObject.draw(self,canvas)
@@ -304,7 +342,7 @@ class PlayerShip(GameWorldObject):
                 bullet.draw(canvas)
 
         #Indicate if shield available
-        canvas.create_text(50, CANVAS_HEIGHT - 20, text='Shield', fill="White")
+        canvas.create_text(50, CANVAS_HEIGHT - 20, text='Shield', fill="White", font=("Purisa", 15))
         colour = 'Red'
         if (get_current_time() - self.last_shield_time) > self.shield_cool_down:
             if not self.invincibility:
@@ -401,9 +439,9 @@ class EnemyShip(GameWorldObject):
         self.ship = ship
         saucer_sound.play(loops=-1)
         self.last_changed=get_current_time()
-        self.interval= random.randint(100,5000)
-        self.drag_factor=0
-        self.colour='White'
+        self.interval = random.randint(100,5000)
+        self.drag_factor = 0
+        self.colour = 'White'
 
 
     def set_initial_position_and_velocity(self):
@@ -464,7 +502,8 @@ class EnemyShip(GameWorldObject):
             y = self.ship.get_y() - self.y
 
             radians = math.atan2(x,y)
-            speed = 1.2
+            bullet_speed = config["enemy_ship_bullet_speed"]
+            speed = bullet_speed
             velocity_x = speed * math.sin(radians)
             velocity_y = speed * math.cos(radians)
 
@@ -483,6 +522,7 @@ class EnemyShip(GameWorldObject):
         self.bullets_used -= 1
 
     def destroy(self):
+        pass
         saucer_sound.stop()
 
     def get_bullets(self):
@@ -508,7 +548,9 @@ class Saucer(EnemyShip):
         return FLYING_SAUCER_SCORE
 
     def set_initial_position_and_velocity(self):
-        self.velocity_x = random.randint(200,400) / 100
+        min_speed = config["saucer_speed_min"]
+        max_speed = config["saucer_speed_max"]
+        self.velocity_x = random.randint(min_speed,max_speed) / 100
         if random.randint(0,1) == 0:
             self.x = 0
         else:
@@ -516,7 +558,7 @@ class Saucer(EnemyShip):
             self.velocity_x *= -1
 
         self.y = random.randint(0,CANVAS_HEIGHT)
-        self.velocity_y = random.randint(200,400) / 100.0 - 0.5
+        self.velocity_y = random.randint(min_speed,max_speed) / 100.0 - 0.5
 
     def update(self):
 
@@ -533,7 +575,8 @@ class Falcon(EnemyShip):
     def __init__(self,ship):
 
         EnemyShip.__init__(self,ship)
-        self.speed = 5
+        speed = config["falcon_speed"]
+        self.speed = speed
         self.radius = 20
 
         self.shape = ((20,5), (20,10), (15,10), (5,20), (-10,20), (-20,10), (-20,-10), (-10,-20), (5,-20), (15,-10),
@@ -565,7 +608,8 @@ class Falcon(EnemyShip):
 class Fighter(EnemyShip):
     def __init__(self,ship):
         EnemyShip.__init__(self,ship)
-        self.speed = 5
+        speed = config["fighter_speed"]
+        self.speed = speed
         self.radius = 20
         self.shape = ((25,0), (5,5), (5,20),(15,20),(-5,20), (0,20), (-5,5), (-10,0), (-5,-5), (0,-20), (-5,-20), (15,-20),
                       (15,-20), (5,-20), (5,-5), (25,0))
@@ -586,14 +630,13 @@ class Fighter(EnemyShip):
             y = self.ship.get_y() - self.y
 
             radians = math.atan2(x,y)
-            speed = 1.2
+            bullet_speed = config["enemy_ship_bullet_speed"]
+            speed = bullet_speed
             velocity_x = speed * math.sin(radians)
             velocity_y = speed * math.cos(radians)
 
 
             #Calculate left bullet initial position
-            # i =  math.degrees(self.gun_angle)
-
             current_gun_angle = math.radians(self.angle) + self.gun_angle
             x = self.x + self.gun_radius * math.cos(current_gun_angle)
             y = self.y + self.gun_radius * math.sin(current_gun_angle)
@@ -646,8 +689,8 @@ class Asteroid(GameWorldObject):
         self.colour="Yellow"
         self.drag_factor=0
         self.radius= 40 / size
-        minRadius = self.radius - (10 / size)
-        maxRadius = self.radius + (10 / size)
+        minRadius = int(self.radius - (10 / size))
+        maxRadius = int(self.radius + (10 / size))
         granularity=20
         minVary=25
         maxVary=75
@@ -678,13 +721,15 @@ class Asteroid(GameWorldObject):
         self.angle= random.randint(0,360)
         self.rotation_factor= random.randint(0,100) / 100.0 - 0.5
 
+        min_speed = config['asteroid_speed_min']
+        max_speed = config['asteroid_speed_max']
         if velocity_x is None:
-            self.velocity_x = random.randint(100,150) / 100.0 - 0.5
+            self.velocity_x = random.randint(min_speed,max_speed) / 100.0 - 0.5
         else:
             self.velocity_x = velocity_x
 
         if velocity_y is None:
-            self.velocity_y = random.randint(100,150) / 100.0 - 0.5
+            self.velocity_y = random.randint(min_speed,max_speed) / 100.0 - 0.5
         else:
             self.velocity_y = velocity_y
 
@@ -735,8 +780,9 @@ class Bullet(GameWorldObject):
             self.y = y
 
         # Bullet movement speed factor
-        self.velocity_x *= 10
-        self.velocity_y *= 10
+        speed_factor = config['bullet_speed_factor']
+        self.velocity_x *= speed_factor
+        self.velocity_y *= speed_factor
 
         # No rotation or rotational speed
         self.rotation_factor = 0
@@ -873,7 +919,7 @@ class PlayGameScreen(Screen):
         if self.player_ship.is_active() and not self.player_ship.is_invincible():
             for enemy_ship in set(self.enemy_ships):
                 if enemy_ship.is_collision(self.player_ship):
-                    explosion_sound.play()
+                    # explosion_sound.play()
                     self.ship_destroyed()
                     enemy_ship.destroy()
                     self.enemy_ships.remove(enemy_ship)
@@ -955,7 +1001,8 @@ class PlayGameScreen(Screen):
             asteroid.draw(self.canvas)
 
         # Show current wave number
-        self.canvas.create_text(CANVAS_WIDTH - 40, CANVAS_HEIGHT - 20, text='Wave  ' + str(self.level) , fill="White")
+        self.canvas.create_text(CANVAS_WIDTH - 45, CANVAS_HEIGHT - 20, text='Wave  ' + str(self.level) , fill="White",
+                                font=("Purisa", 15))
 
         # Print game over message if needed
         if self.game_over == True:
@@ -977,13 +1024,14 @@ class PlayGameScreen(Screen):
 
 
     def capture_name(self):
-
+        label_size = config["label_and_entry_box_size"]
+        entry_box_size = config["label_and_entry_box_size"]
         self.name_frame = Frame(self.canvas, bd=0, bg="Black")
         self.name_frame.pack()
-        l = Label(self.name_frame,  bg="Black", fg="White", text="ENTER YOUR NAME", bd=0, font=("Purisa", 20))
+        l = Label(self.name_frame, bg="Black", fg="White", text="ENTER YOUR NAME:", bd=0, font=("Purisa", label_size))
         l.pack(side=LEFT)
 
-        self.name_entry = Entry(self.name_frame, width=20, bg="Black", fg="White", bd=0, insertbackground="White")
+        self.name_entry = Entry(self.name_frame, width=entry_box_size, bg="Black", fg="White", bd=0, insertbackground="White", font=("Purisa", entry_box_size))
         self.name_entry.focus()
         self.name_entry.pack()
         self.name_entry.bind("<Return>",self.save_score)
@@ -997,7 +1045,7 @@ class PlayGameScreen(Screen):
 
         if not valid:
             self.canvas.create_text(CANVAS_WIDTH/2 + 90, CANVAS_HEIGHT/2 + 25, fill='Yellow', text='INVALID NAME', font=("Purisa", 20))
-            self.name_entry.delete(0,END)
+            self.name_entry.delete(0, END)
             self.name_entry.focus()
         else:
             score = self.player_ship.get_score()
@@ -1032,9 +1080,11 @@ class HighScoresScreen(Screen):
     def draw(self):
         self.canvas.delete("all")
         self.canvas.create_image(10, 10, image = self.backgroundImage, anchor = NW)
-        self.canvas.create_text(CANVAS_WIDTH/2,50, fill='White', text='HIGH SCORES', font=("Purisa", 65))
+        high_screen_size = config['high_scores_size']
+        self.canvas.create_text(CANVAS_WIDTH/2,50, fill='White', text='HIGH SCORES', font=("Purisa", high_screen_size))
         heading='   NAME                    SCORE'
-        self.canvas.create_text(100,150, fill='White', text=heading, font=("Courier", 25), anchor=W)
+        score_size = config['scores_size']
+        self.canvas.create_text(100, 150, fill='White', text=heading, font=("Courier", score_size), anchor=W)
 
         score_format="{0} {1} {2}"
         y_position=150
@@ -1046,7 +1096,7 @@ class HighScoresScreen(Screen):
             name = score[1].upper().ljust(20)
             score = str(score[2]).rjust(8)
             score_string = score_format.format(rank,name, score )
-            self.canvas.create_text(100,y_position, fill='White', text=score_string, font=("Courier", 25), anchor=W)
+            self.canvas.create_text(100, y_position, fill='White', text=score_string, font=("Courier", score_size), anchor=W)
 
         back_id=self.canvas.create_text(CANVAS_WIDTH/2, 650, fill='White', text='BACK TO MAIN MENU', font=("Purisa", 25))
         self.canvas.tag_bind(back_id, "<Button-1>", self.frame.show_main_screen)
@@ -1091,20 +1141,12 @@ class Application(Frame):
         self.screen.draw()
 
 
+Canvas.create_circle = _create_circle
 scores=ScoreDatabase()
 scores.create_database()
 
-root = Tk()
-Canvas.create_circle = _create_circle
-
 root.title("Asteroids")
 app = Application(root)
-
-def on_closing():
-        print "In on_closing"
-        root.destroy()
-
-root.protocol('WM_DELETE_WINDOW', on_closing)
 
 root.mainloop()
 
