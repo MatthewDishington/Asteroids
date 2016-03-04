@@ -1,15 +1,14 @@
 __author__ = 'Matthew'
 
-
 from Tkinter import *
 import random
 import math
 import time
-import sqlite3
 import re
 import webbrowser
 import os
 import pygame
+from ScoreDatabase import *
 
 root = Tk()
 
@@ -67,55 +66,6 @@ def get_current_time():
 
 def _create_circle(self, x, y, r, **kwargs):
     return self.create_oval(x-r, y-r, x+r, y+r, **kwargs)
-
-class ScoreDatabase:
-
-    def __init__(self):
-        self.connection = sqlite3.connect('Asteroid.sqlite')
-        self.cursor = self.connection.cursor()
-
-    def create_database(self):
-        self.cursor.executescript('''
-
-        CREATE TABLE IF NOT EXISTS User (
-            id     INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT UNIQUE,
-            name   TEXT UNIQUE
-        );
-
-        CREATE TABLE IF NOT EXISTS Score (
-            id     INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT UNIQUE,
-            user_id INTEGER,
-            score INTEGER,
-            score_datetime TEXT
-        );
-
-        ''')
-
-    def get_high_scores(self):
-        highscores=[]
-        position=0
-        self.cursor.execute('''SELECT U.name,S.score
-                            FROM User U JOIN Score S ON S.user_id =U.id
-                            ORDER BY S.score DESC LIMIT  10''')
-
-        rows = self.cursor.fetchall()
-
-        for row in rows:
-            position+=1
-            highscores.append((position, row[0], row[1]))
-
-        return highscores
-
-    def save_score(self, name, score):
-        self.cursor.execute('''INSERT OR IGNORE INTO User (name)
-        VALUES ( ? )''', ( name, ) )
-        self.cursor.execute('SELECT id FROM User WHERE name = ? ', (name, ))
-        user_id = self.cursor.fetchone()[0]
-
-        self.cursor.execute('''INSERT OR IGNORE INTO Score (user_id, score, score_datetime)
-        VALUES ( ?, ?, datetime("now"))''', (user_id,score ) )
-
-        self.connection.commit()
 
 
 class GameWorldObject:
@@ -1010,6 +960,10 @@ class PlayGameScreen(Screen):
             thrust_sound.stop()
             explosion_sound.stop()
             self.canvas.create_text(CANVAS_WIDTH/2, CANVAS_HEIGHT/2 - 100, text="GAME OVER", fill="White", font=("Purisa", 35) )
+            score = self.player_ship.get_score()
+            rank = scores_database.get_rank(score)
+            rank_text = 'YOU RANKED: '+ str(rank)
+            self.canvas.create_text(CANVAS_WIDTH/2, CANVAS_HEIGHT/2 - 50, text=rank_text, fill="White", font=("Purisa", 20))
             self.capture_name()
 
         if self.game_over == False:
@@ -1035,7 +989,7 @@ class PlayGameScreen(Screen):
         self.name_entry.focus()
         self.name_entry.pack()
         self.name_entry.bind("<Return>",self.save_score)
-        self.canvas.create_window(CANVAS_WIDTH/2, CANVAS_HEIGHT/2 + 50, window=self.name_frame)
+        self.canvas.create_window(CANVAS_WIDTH/2, CANVAS_HEIGHT/2 + 70, window=self.name_frame)
 
 
     def save_score (self, event):
@@ -1044,12 +998,12 @@ class PlayGameScreen(Screen):
         name = name.upper()
 
         if not valid:
-            self.canvas.create_text(CANVAS_WIDTH/2 + 90, CANVAS_HEIGHT/2 + 25, fill='Yellow', text='INVALID NAME', font=("Purisa", 20))
+            self.canvas.create_text(CANVAS_WIDTH/2 + 90, CANVAS_HEIGHT/2 + 45, fill='Yellow', text='INVALID NAME', font=("Purisa", 20))
             self.name_entry.delete(0, END)
             self.name_entry.focus()
         else:
             score = self.player_ship.get_score()
-            scores.save_score(name,score)
+            scores_database.save_score(name, score)
             self.frame.show_high_scores(None)
 
     def create_enemy_ship(self):
@@ -1142,11 +1096,12 @@ class Application(Frame):
 
 
 Canvas.create_circle = _create_circle
-scores=ScoreDatabase()
-scores.create_database()
+scores_database=ScoreDatabase()
+scores_database.create_database()
 
 root.title("Asteroids")
 app = Application(root)
 
 root.mainloop()
+
 

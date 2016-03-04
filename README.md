@@ -18,11 +18,6 @@ Can go from top to bottom or left to right
 More then one at a time
 
 
-
-
-Make two person game
-
-
 Sound (Done 4/1/16)
 Background (Done 2/1/16)
 Save high scores (Done (2/2/16)
