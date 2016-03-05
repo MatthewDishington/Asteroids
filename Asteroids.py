@@ -124,7 +124,7 @@ class PlayGameScreen(Screen):
         self.addShip(ship)
         self.enemy_ships = set([])
         self.asteroids = set([])
-        self.level = 3
+        self.level = 1
         self.create_new_wave()
         self.last_enemy_ship_time = get_current_time()
         self.enemy_ship_interval = random.randint(2000,20000)
