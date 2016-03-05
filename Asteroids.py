@@ -1,16 +1,20 @@
 __author__ = 'Matthew'
 
 from Tkinter import *
-import random
-import math
-import time
+root = Tk()
+
 import re
 import webbrowser
 import os
-import pygame
-from ScoreDatabase import *
 
-root = Tk()
+from ScoreDatabase import *
+from PlayerShip import *
+from Asteroid import *
+from Saucer import *
+from Falcon import *
+from Fighter import *
+
+# root = Tk()
 
 if os.name == "posix": # e.g. mac
     config={"bullet_speed_factor": 10,
@@ -26,7 +30,6 @@ if os.name == "posix": # e.g. mac
             "saucer_speed_max": 400,
             "falcon_speed": 3,
             "fighter_speed": 3
-
 
             }
 else:
@@ -46,708 +49,13 @@ else:
             "fighter_speed": 3
             }
 
-pygame.init()
-pygame.mixer.init()
-fire_sound = pygame.mixer.Sound('fire.wav')
-thrust_sound = pygame.mixer.Sound('thrust.wav')
-explosion_sound = pygame.mixer.Sound('explosion.wav')
-saucer_sound = pygame.mixer.Sound('saucer.wav')
-
 CANVAS_WIDTH = 700
 CANVAS_HEIGHT = 700
 SCORE = {1:10, 2:50, 3:100}
-FLYING_SAUCER_SCORE = 500
-FALCON_SCORE = 750
-FIGHTER_SCORE = 1000
-
-
-def get_current_time():
-    return int(round(time.time() * 1000))
 
 def _create_circle(self, x, y, r, **kwargs):
     return self.create_oval(x-r, y-r, x+r, y+r, **kwargs)
 
-
-class GameWorldObject:
-    def __init__(self):
-        self.colour = "White"
-        self.points = list()
-        self.angle = 0
-        self.shape = list()
-        self.x = 0
-        self.velocity_x = 0
-        self.y = 0
-        self.velocity_y = 0
-        self.radius = 0
-
-    def draw(self, canvas):
-        canvas.create_polygon(self.points, fill='', outline=self.colour)
-
-    def update(self):
-        self._update_position()
-        self._set_points()
-
-    def _set_points(self):
-        self.points = self._calc_points(self.shape, self.angle)
-
-    def _calc_points(self, shape, angle):
-        radians = angle * math.pi /180.0
-        sine = math.sin(radians)
-        cosine = math.cos(radians)
-
-        # calculate point position
-        points = list()
-        for p in shape:
-            new_x = p[0] * cosine - p[1] * sine
-            new_y = p[0] * sine + p[1] * cosine
-            points.append((self.x + new_x , self.y + new_y))
-
-        return points
-
-    def _update_position(self):
-        # update position based on movement speed (velocity speed)
-        self.x += self.velocity_x
-        self.y += self.velocity_y
-
-        # Use Stoke's law to apply drag to the ship
-        self.velocity_x -= self.velocity_x * self.drag_factor
-        self.velocity_y -= self.velocity_y * self.drag_factor
-
-        # keep object in game world  (wrap around borders )
-        if self.x < 0:
-            self.x += CANVAS_WIDTH
-        elif self.x > CANVAS_WIDTH:
-            self.x -= CANVAS_WIDTH
-
-        if self.y < 0:
-            self.y += CANVAS_HEIGHT
-        elif self.y > CANVAS_HEIGHT:
-            self.y -= CANVAS_HEIGHT
-
-    def get_angle(self):
-        return self.angle
-
-    def get_x(self):
-        return self.x
-
-    def get_y(self):
-        return self.y
-
-    def get_velocity_x(self):
-        return self.velocity_x
-
-    def get_velocity_y(self):
-        return self.velocity_y
-
-    def is_collision(self, gameObject):
-        collision = False
-
-        x = gameObject.get_x() - self.get_x()
-        y = gameObject.get_y() - self.get_y()
-        distance = math.sqrt(x**2 + y**2)
-        if gameObject.get_radius() + self.get_radius() >= distance:
-            collision = True
-
-        return collision
-
-    def get_radius(self):
-        return self.radius
-
-
-class PlayerShip(GameWorldObject):
-    def __init__(self):
-        GameWorldObject.__init__(self)
-        acceleration = config["acceleration_factor"]
-        self.acceleration_factor = acceleration
-        self.drag_factor = 0.02
-        rotation = config["rotation_factor"]
-        self.rotation_factor = rotation
-        self.score = 0
-        self.active = True
-        self.reactivate_time = 0
-        self.lives = 3
-        self.radius= 15
-        self.shield_duration = 4000
-        self.shield_cool_down = 15000
-        self.thrust_sound_playing = False
-        self.thrust_sound_duration = 500
-        self.thrust_sound_last_played = 0
-        self.count = 0
-
-        # calculate the co-ordinates of the ship
-        xTop = 0
-        xSize = 25
-        ySize = 30
-        yTop = -ySize/2
-        yIndent = 10
-
-        # shape centered at (0,0)
-        self.shape = ( (xTop, yTop),
-                        (xTop + xSize/2.0, yTop + ySize),
-                        (xTop, yTop + ySize - yIndent),
-                        (xTop - xSize/2.0, yTop + ySize) )
-
-        self.thruster_shape = ( (xTop - xSize/8.0, yTop + ySize - 5),
-                            (xTop, yTop +ySize + yIndent - 5),
-                            (xTop + xSize/8.0 , yTop + ySize - 5))
-
-        self.bullet_cool_down= 200 # Fire Cool Down (ms)
-        self.max_bullets = 4 # Number of bullets allowed on screen
-
-        self.reset()
-
-    def reset(self):
-
-        # position at center of canvas
-        self.x = CANVAS_WIDTH/2
-        self.y = CANVAS_HEIGHT / 2
-
-        self.angle = 0 # orientation
-
-        # speed
-        self.velocity_x = 0
-        self.velocity_y = 0
-
-        self.bullets = set([])
-        self.last_bullet_time = 0
-        self.bullets_used = 0
-
-        #Make invincible
-        self.invincibility = True
-        self.last_shield_time = get_current_time()
-
-    def set_active(self,active):
-        self.active = active
-
-    def is_active(self):
-        return self.active
-
-    def rotate_left(self, event):
-        self.angle -= self.rotation_factor
-
-    def rotate_right(self, event):
-        self.angle += self.rotation_factor
-
-    def accelerate(self, event):
-        """
-        accelerate the ship in the current direction
-        """
-        radians = self.angle * math.pi /180.0
-        x = math.sin(radians)
-        y = math.cos(radians)
-
-        #  add to velocity vector
-        self.velocity_x += x * self.acceleration_factor
-        self.velocity_y -= y * self.acceleration_factor
-
-        # if not self.thrust_sound_playing:
-        self.thrust_sound_last_played = get_current_time()
-        if not self.thrust_sound_playing:
-            self.thrust_sound_playing = True
-            thrust_sound.play(loops=-1)
-
-    def update(self):
-        # check if ship is action
-        if self.active == False:
-            if get_current_time() < self.reactivate_time:
-                return
-            self.active = True
-            self.reset()
-
-        #Update shield flag
-        self.invincibility = (get_current_time() - self.last_shield_time) < self.shield_duration
-
-        for bullet in set(self.bullets):
-            if bullet.remove():
-                self.bullets_used = max(self.bullets_used - 1, 0)
-                self.bullets.remove(bullet)
-            else:
-                bullet.update()
-
-        GameWorldObject.update(self)
-
-    def draw(self,canvas):
-
-        if self.thrust_sound_playing:
-            if get_current_time() - self.thrust_sound_last_played > self.thrust_sound_duration:
-                self.thrust_sound_playing = False
-                thrust_sound.stop()
-
-        #Draw lives
-        canvas.create_text(50,20, text='Lives:', fill='White', font=("Purisa", 15))
-
-        for i in range(self.lives):
-            canvas.create_circle((i * 15) + 35, 40, 5, fill="Green")
-
-        canvas.create_text(CANVAS_WIDTH - 50,20, text='Score:', fill='White', font=("Purisa", 15) )
-        canvas.create_text(CANVAS_WIDTH - 50,40, text=str(self.score), fill='Blue', font=("Purisa", 15) )
-
-        if self.active:
-            GameWorldObject.draw(self,canvas)
-            if self.invincibility:
-                canvas.create_circle(self.x, self.y,self.radius + 7, outline="White")
-            self.draw_thruster(canvas)
-
-            for bullet in self.bullets:
-                bullet.draw(canvas)
-
-        #Indicate if shield available
-        canvas.create_text(50, CANVAS_HEIGHT - 20, text='Shield', fill="White", font=("Purisa", 15))
-        colour = 'Red'
-        if (get_current_time() - self.last_shield_time) > self.shield_cool_down:
-            if not self.invincibility:
-                colour='Green'
-        canvas.create_rectangle(80, CANVAS_HEIGHT - 15, 90, CANVAS_HEIGHT - 25, fill=colour)
-
-
-    def draw_thruster(self, canvas):
-        self.count += 1
-        self.count = self.count % 10
-        if self.thrust_sound_playing:
-            if self.count < 5:
-                thruster_points = GameWorldObject._calc_points(self, self.thruster_shape, self.angle)
-                canvas.create_line((thruster_points[0], thruster_points[1]), fill="White")
-                canvas.create_line((thruster_points[1], thruster_points[2]), fill="White")
-
-    def fire(self,event):
-        if not self.active:
-            return
-
-        # Dont fire unless the cooldown period has expired
-        if (get_current_time() - self.last_bullet_time >= self.bullet_cool_down):
-
-            #Dont fire if the maximum number of bullets are already on scren
-            if self.bullets_used < self.max_bullets:
-
-                #Make new bullet
-                bullet = Bullet(self)
-                self.bullets.add(bullet)
-
-                #Last bullet fired now
-                self.last_bullet_time = get_current_time()
-                self.bullets_used += 1
-
-                #Play fire sound
-                fire_sound.play()
-
-    def add_points(self,points):
-        self.score+=points
-
-    def get_score(self):
-        return self.score
-
-    #Reset cooldown (used when fire key is released)
-    def reset_bullet_cooldown(self,event):
-        self.last_bullet_time = 0
-
-    def get_bullets(self):
-        return list(self.bullets)
-
-    def remove_bullet(self, bullet):
-        self.bullets.remove(bullet)
-        self.bullets_used -= 1
-
-    def make_inactive_for(self, milliseconds):
-        self.active = False
-        self.reactivate_time = get_current_time() + milliseconds
-
-    def get_lives(self):
-        return self.lives
-
-    def remove_live(self):
-        self.lives -= 1
-
-    def is_collision(self, gameObject):
-        if not self.active:
-            return False
-
-        return GameWorldObject.is_collision(self, gameObject)
-
-    def handle_activate_shield_event(self, event):
-        if not self.invincibility:
-            if get_current_time() - self.last_shield_time > self.shield_cool_down:
-                self.activate_shield()
-
-    def is_invincible(self):
-        return self.invincibility
-
-    def activate_shield(self):
-        self.invincibility = True
-        self.last_shield_time = get_current_time()
-
-class EnemyShip(GameWorldObject):
-    def __init__(self,ship):
-
-        # Bullets:
-        self.bullets_used = 0
-        self.last_bullet_time = get_current_time()
-        self.bullet_interval = random.randint(500,2000)
-        self.max_bullets = 1 # Number of bullets allowed on screen
-        self.bullets = set()
-
-        # Saucer
-        self.ship = ship
-        saucer_sound.play(loops=-1)
-        self.last_changed=get_current_time()
-        self.interval = random.randint(100,5000)
-        self.drag_factor = 0
-        self.colour = 'White'
-
-
-    def set_initial_position_and_velocity(self):
-        self.velocity_x = random.randint(200,400) / 100
-        self.velocity_y = random.randint(200,400) / 100.0 - 0.5
-        choice = random.randint(0,3)
-
-        if choice == 0:
-            self.x = random.randint(0,CANVAS_WIDTH)
-            self.y = 0
-        elif choice == 1:
-            self.x = CANVAS_WIDTH
-            self.y = random.randint(0,CANVAS_HEIGHT)
-            self.velocity_x *= -1
-        elif choice == 2:
-            self.x = random.randint(0,CANVAS_WIDTH)
-            self.y = CANVAS_HEIGHT
-            self.velocity_y *= -1
-        else:
-            self.x = 0
-            self.y = random.randint(0,CANVAS_HEIGHT)
-
-        radians = math.atan2(self.velocity_y,
-                             self.velocity_x)
-        self.angle = math.degrees(radians)
-
-
-    def update(self):
-
-        current_time = get_current_time()
-
-        if current_time > self.last_bullet_time + self.bullet_interval:
-            self.fire()
-            self.bullet_interval = random.randint(500,2000)
-
-        for bullet in set(self.bullets):
-            if bullet.remove():
-                self.bullets_used = max(self.bullets_used - 1, 0)
-                self.bullets.remove(bullet)
-            else:
-                bullet.update()
-
-
-        GameWorldObject.update(self)
-
-    def draw(self, canvas):
-
-        GameWorldObject.draw(self,canvas)
-        for bullet in self.bullets:
-            bullet.draw(canvas)
-
-    def fire(self):
-
-        if self.bullets_used < self.max_bullets:
-
-            #Make new bullet
-            x = self.ship.get_x() - self.x
-            y = self.ship.get_y() - self.y
-
-            radians = math.atan2(x,y)
-            bullet_speed = config["enemy_ship_bullet_speed"]
-            speed = bullet_speed
-            velocity_x = speed * math.sin(radians)
-            velocity_y = speed * math.cos(radians)
-
-            bullet = Bullet(self, velocity_x=velocity_x, velocity_y=velocity_y)
-            self.bullets.add(bullet)
-
-            #Last bullet fired now
-            self.last_bullet_time = get_current_time()
-            self.bullets_used += 1
-
-            #Play fire sound
-            fire_sound.play()
-
-    def remove_bullet(self, bullet):
-        self.bullets.remove(bullet)
-        self.bullets_used -= 1
-
-    def destroy(self):
-        pass
-        saucer_sound.stop()
-
-    def get_bullets(self):
-        return list(self.bullets)
-
-    def get_points(self):
-        pass
-
-class Saucer(EnemyShip):
-    def __init__(self,ship):
-
-        EnemyShip.__init__(self,ship)
-
-        self.radius = 10
-        self.angle=0
-        self.shape = ((-10,2),(10,2),(6,6), (-6,6), (-10,2), (-4,-2),(4,-2),
-                        (-4,-2),(-4,-4),
-                        (4,-4), (4,-2), (10,2))
-        self.set_initial_position_and_velocity()
-        self.update()
-
-    def get_points(self):
-        return FLYING_SAUCER_SCORE
-
-    def set_initial_position_and_velocity(self):
-        min_speed = config["saucer_speed_min"]
-        max_speed = config["saucer_speed_max"]
-        self.velocity_x = random.randint(min_speed,max_speed) / 100
-        if random.randint(0,1) == 0:
-            self.x = 0
-        else:
-            self.x=CANVAS_WIDTH -1
-            self.velocity_x *= -1
-
-        self.y = random.randint(0,CANVAS_HEIGHT)
-        self.velocity_y = random.randint(min_speed,max_speed) / 100.0 - 0.5
-
-    def update(self):
-
-        current_time = get_current_time()
-
-        if current_time > self.last_changed + self.interval:
-            self.velocity_y *= -1
-            self.last_changed=get_current_time()
-            self.interval = random.randint(100,5000)
-
-        EnemyShip.update(self)
-
-class Falcon(EnemyShip):
-    def __init__(self,ship):
-
-        EnemyShip.__init__(self,ship)
-        speed = config["falcon_speed"]
-        self.speed = speed
-        self.radius = 20
-
-        self.shape = ((20,5), (20,10), (15,10), (5,20), (-10,20), (-20,10), (-20,-10), (-10,-20), (5,-20), (15,-10),
-                      (20,-10), (20,-5), (10,-5), (10,5), (20,5))
-
-        self.set_initial_position_and_velocity()
-        self.interval = 1000
-        self.update()
-
-    def get_points(self):
-        return FALCON_SCORE
-
-    def update(self):
-
-        current_time = get_current_time()
-
-        if current_time > self.last_changed + self.interval:
-            x = self.ship.get_x() - self.x
-            y = self.ship.get_y() - self.y
-            radians = math.atan2(y,x)
-            self.angle = math.degrees(radians)
-            self.velocity_x = self.speed * math.cos(radians)
-            self.velocity_y = self.speed * math.sin(radians)
-            self.last_changed=get_current_time()
-
-        EnemyShip.update(self)
-
-
-class Fighter(EnemyShip):
-    def __init__(self,ship):
-        EnemyShip.__init__(self,ship)
-        speed = config["fighter_speed"]
-        self.speed = speed
-        self.radius = 20
-        self.shape = ((25,0), (5,5), (5,20),(15,20),(-5,20), (0,20), (-5,5), (-10,0), (-5,-5), (0,-20), (-5,-20), (15,-20),
-                      (15,-20), (5,-20), (5,-5), (25,0))
-        self.max_bullets = 2 # Number of bullets allowed on screen
-        self.gun_radius = math.sqrt(15**2 + 20**2)
-        self.gun_angle = math.atan2(20,15)
-        self.set_initial_position_and_velocity()
-        self.interval = 1000
-        self.update()
-
-    def fire(self):
-
-        if self.bullets_used < self.max_bullets:
-
-            #Make new bullet
-            #Calculate bullet Velocity
-            x = self.ship.get_x() - self.x
-            y = self.ship.get_y() - self.y
-
-            radians = math.atan2(x,y)
-            bullet_speed = config["enemy_ship_bullet_speed"]
-            speed = bullet_speed
-            velocity_x = speed * math.sin(radians)
-            velocity_y = speed * math.cos(radians)
-
-
-            #Calculate left bullet initial position
-            current_gun_angle = math.radians(self.angle) + self.gun_angle
-            x = self.x + self.gun_radius * math.cos(current_gun_angle)
-            y = self.y + self.gun_radius * math.sin(current_gun_angle)
-            bullet = Bullet(self, x=x, y=y, velocity_x=velocity_x, velocity_y=velocity_y)
-            self.bullets.add(bullet)
-
-            #Calculate right bullet initial position
-            current_gun_angle = math.radians(self.angle) - self.gun_angle
-            x = self.x + self.gun_radius * math.cos(current_gun_angle)
-            y = self.y + self.gun_radius * math.sin(current_gun_angle)
-            bullet = Bullet(self, x=x, y=y, velocity_x=velocity_x, velocity_y=velocity_y)
-            self.bullets.add(bullet)
-
-
-            #Last bullet fired now
-            self.last_bullet_time = get_current_time()
-            self.bullets_used += 1
-
-            #Play fire sound
-            fire_sound.play()
-
-    def get_points(self):
-        return FIGHTER_SCORE
-
-    def update(self):
-
-        current_time = get_current_time()
-
-        if current_time > self.last_changed + self.interval:
-            x = self.ship.get_x() - self.x
-            y = self.ship.get_y() - self.y
-            radians = math.atan2(y,x)
-            self.angle = math.degrees(radians)
-            self.velocity_x = self.speed * math.cos(radians)
-            self.velocity_y = self.speed * math.sin(radians)
-            self.last_changed=get_current_time()
-
-        EnemyShip.update(self)
-
-
-class Asteroid(GameWorldObject):
-    def __init__(self, size, x = None, y = None, velocity_x = None, velocity_y = None):
-        GameWorldObject.__init__(self)
-
-        if size < 1:
-            self.size = 1
-        else:
-            self.size = size
-
-        self.colour="Yellow"
-        self.drag_factor=0
-        self.radius= 40 / size
-        minRadius = int(self.radius - (10 / size))
-        maxRadius = int(self.radius + (10 / size))
-        granularity=20
-        minVary=25
-        maxVary=75
-
-        self.shape=[]
-        angle=0
-        while angle < 2 * math.pi:
-            angleVaryPc=random.randint(minVary, maxVary)
-            angleVaryRadians= (2 * math.pi / granularity) * angleVaryPc / 100
-            angleFinal = angle + angleVaryRadians - (math.pi / granularity)
-            radius= random.randint(minRadius, maxRadius)
-            point=[0,0]
-            point[0]= math.sin(angleFinal) * radius
-            point[1]= math.cos(angleFinal) * radius
-            self.shape.append(point)
-            angle += 2 * math.pi / granularity
-
-        if x is None:
-            self.x = random.randint(0,CANVAS_WIDTH)
-        else:
-            self.x = x
-
-        if y is None:
-            self.y = random.randint(0,CANVAS_HEIGHT)
-        else:
-            self.y = y
-
-        self.angle= random.randint(0,360)
-        self.rotation_factor= random.randint(0,100) / 100.0 - 0.5
-
-        min_speed = config['asteroid_speed_min']
-        max_speed = config['asteroid_speed_max']
-        if velocity_x is None:
-            self.velocity_x = random.randint(min_speed,max_speed) / 100.0 - 0.5
-        else:
-            self.velocity_x = velocity_x
-
-        if velocity_y is None:
-            self.velocity_y = random.randint(min_speed,max_speed) / 100.0 - 0.5
-        else:
-            self.velocity_y = velocity_y
-
-        self.update() # create the points
-
-    def remove(self):
-        pass
-
-    def get_radius(self):
-        return self.radius
-
-    def get_size(self):
-        return self.size
-
-class Bullet(GameWorldObject):
-    def __init__(self,ship, x=None, y=None, velocity_x=None, velocity_y=None):
-        GameWorldObject.__init__(self)
-        self.shape = ((0,0),(0,5))
-        self.radius = 2.5
-
-        # Direction of Bullet should be the direction in which the ship is facing
-        self.angle = ship.get_angle()
-
-        if velocity_x is None:
-            self.velocity_x = math.sin(2 * math.pi * (ship.get_angle()/360.0))
-        else:
-            self.velocity_x = velocity_x
-
-        if velocity_y is None:
-            self.velocity_y = -math.cos(2 * math.pi * (ship.get_angle()/360.0))
-        else:
-            self.velocity_y = velocity_y
-
-        if x is None:
-            #Initial position of the bullet should be the ships center point
-            self.x = ship.get_x()
-            # Move the Bullet artificially a bit so it doesn't render inside the ship
-            self.x += self.velocity_x * 20
-        else:
-            self.x = x
-
-        if y is None:
-            #Initial position of the bullet should be the ships center point
-            self.y = ship.get_y()
-            # Move the Bullet artificially a bit so it doesn't render inside the ship
-            self.y += self.velocity_y * 20
-        else:
-            self.y = y
-
-        # Bullet movement speed factor
-        speed_factor = config['bullet_speed_factor']
-        self.velocity_x *= speed_factor
-        self.velocity_y *= speed_factor
-
-        # No rotation or rotational speed
-        self.rotation_factor = 0
-        self.drag_factor = 0
-
-        self.created_time = get_current_time()
-        self.time_to_live = 1400
-        self.update()
-
-    def remove(self):
-    # Remove a bullet if its Time To Live has expired
-        return get_current_time() - self.created_time > self.time_to_live
-
-    def get_radius(self):
-        return self.radius
 
 class Screen():
 
@@ -771,7 +79,7 @@ class MainScreen(Screen):
             velocity_x = random.randint(50,100) / 100.0 - 0.2
             velocity_y = random.randint(50,100) / 100.0 - 0.2
 
-            self.asteroids.add(Asteroid(1,velocity_x=velocity_x,velocity_y=velocity_y))
+            self.asteroids.add(Asteroid(CANVAS_WIDTH, CANVAS_HEIGHT,1,config,velocity_x=velocity_x,velocity_y=velocity_y))
 
     def draw(self):
         if self.frame.screen != self:
@@ -809,13 +117,14 @@ class PlayGameScreen(Screen):
 
     def __init__(self, frame, canvas):
         Screen.__init__(self,frame, canvas)
+        Sounds.load_sounds()
         self.game_over = False
 
-        ship = PlayerShip()
+        ship = PlayerShip(CANVAS_WIDTH, CANVAS_HEIGHT, config)
         self.addShip(ship)
         self.enemy_ships = set([])
         self.asteroids = set([])
-        self.level = 1
+        self.level = 3
         self.create_new_wave()
         self.last_enemy_ship_time = get_current_time()
         self.enemy_ship_interval = random.randint(2000,20000)
@@ -855,7 +164,7 @@ class PlayGameScreen(Screen):
             bullets = self.player_ship.get_bullets()
             for bullet in bullets:
                 if bullet.is_collision(enemy_ship):
-                    explosion_sound.play()
+                    Sounds.explosion_sound.play()
                     points = enemy_ship.get_points()
                     self.player_ship.add_points(points)
                     self.player_ship.remove_bullet(bullet)
@@ -893,14 +202,14 @@ class PlayGameScreen(Screen):
             bullets = self.player_ship.get_bullets()
             for bullet in bullets:
                 if bullet.is_collision(asteroid):
-                    explosion_sound.play()
+                    Sounds.explosion_sound.play()
                     size = asteroid.get_size()
                     if size < 3:
-                        a1 = Asteroid(size + 1, asteroid.get_x(), asteroid.get_y(),
+                        a1 = Asteroid(CANVAS_WIDTH, CANVAS_HEIGHT, size + 1, config, asteroid.get_x(), asteroid.get_y(),
                                       asteroid.get_velocity_y() * -1.25 * size, asteroid.get_velocity_x() * 1.25 * size)
                         self.asteroids.add(a1)
 
-                        a2 = Asteroid(size + 1, asteroid.get_x(), asteroid.get_y(),
+                        a2 = Asteroid(CANVAS_WIDTH, CANVAS_HEIGHT,size + 1, config, asteroid.get_x(), asteroid.get_y(),
                                       asteroid.get_velocity_y() * 1.25 * size, asteroid.get_velocity_x() * -1.25 * size)
 
                         self.asteroids.add(a2)
@@ -923,7 +232,7 @@ class PlayGameScreen(Screen):
             self.create_new_wave()
 
     def ship_destroyed(self):
-        explosion_sound.play()
+        Sounds.explosion_sound.play()
         self.player_ship.remove_live()
         if self.player_ship.get_lives() <= 0:
             self.player_ship.set_active(False)
@@ -956,9 +265,8 @@ class PlayGameScreen(Screen):
 
         # Print game over message if needed
         if self.game_over == True:
-            fire_sound.stop()
-            thrust_sound.stop()
-            explosion_sound.stop()
+            Sounds.stop_sounds()
+
             self.canvas.create_text(CANVAS_WIDTH/2, CANVAS_HEIGHT/2 - 100, text="GAME OVER", fill="White", font=("Purisa", 35) )
             score = self.player_ship.get_score()
             rank = scores_database.get_rank(score)
@@ -974,7 +282,7 @@ class PlayGameScreen(Screen):
     def create_new_wave(self):
         self.player_ship.activate_shield()
         for i in range(0,self.level + 2):
-            self.asteroids.add(Asteroid(1))
+            self.asteroids.add(Asteroid(CANVAS_WIDTH, CANVAS_HEIGHT,1, config))
 
 
     def capture_name(self):
@@ -1014,15 +322,15 @@ class PlayGameScreen(Screen):
             if self.level >= fighter_level:
                 max_ships = self.level - fighter_level + 1
                 while len(self.enemy_ships) < max_ships:
-                    self.enemy_ships.add(Fighter(self.player_ship))
+                    self.enemy_ships.add(Fighter(CANVAS_WIDTH, CANVAS_HEIGHT,self.player_ship, config))
                     self.last_enemy_ship_time = current_time
             elif self.level >= 4:
                   if len(self.enemy_ships) < 1:
-                    self.enemy_ships.add(Falcon(self.player_ship))
+                    self.enemy_ships.add(Falcon(CANVAS_WIDTH, CANVAS_HEIGHT,self.player_ship, config))
                     self.last_enemy_ship_time = current_time
             elif self.level >= 3:
                 if len(self.enemy_ships) < 1:
-                    self.enemy_ships.add(Saucer(self.player_ship))
+                    self.enemy_ships.add(Saucer(CANVAS_WIDTH, CANVAS_HEIGHT,self.player_ship, config))
                     self.last_enemy_ship_time = current_time
 
 
@@ -1055,7 +363,6 @@ class HighScoresScreen(Screen):
         back_id=self.canvas.create_text(CANVAS_WIDTH/2, 650, fill='White', text='BACK TO MAIN MENU', font=("Purisa", 25))
         self.canvas.tag_bind(back_id, "<Button-1>", self.frame.show_main_screen)
 
-
 class Application(Frame):
     def __init__(self, parent):
         Frame.__init__(self, parent)
@@ -1065,7 +372,7 @@ class Application(Frame):
         self.canvas.pack()
         self.hs = []
         self.screen = None
-        self.show_main_screen(None)
+        # self.show_main_screen(None)
 
     def get_parent(self):
         return self.parent
@@ -1094,13 +401,13 @@ class Application(Frame):
         self.screen = PlayGameScreen(self,self.canvas)
         self.screen.draw()
 
-
 Canvas.create_circle = _create_circle
 scores_database=ScoreDatabase()
 scores_database.create_database()
 
 root.title("Asteroids")
 app = Application(root)
+app.show_main_screen(None)
 
 root.mainloop()
 
