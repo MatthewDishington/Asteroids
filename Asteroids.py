@@ -1,6 +1,6 @@
 __author__ = 'Matthew'
 
-from Tkinter import *
+from tkinter import *
 root = Tk()
 
 import re
@@ -318,7 +318,7 @@ class PlayGameScreen(Screen):
 
         current_time = get_current_time()
         if current_time > self.last_enemy_ship_time + self.enemy_ship_interval:
-            fighter_level = 5
+            fighter_level = 1
             if self.level >= fighter_level:
                 max_ships = self.level - fighter_level + 1
                 while len(self.enemy_ships) < max_ships:
